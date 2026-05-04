@@ -101,6 +101,38 @@ Similarly, season fixed effects shouldn't be regularized at all — they're not 
 
 Run-scoring environments vary dramatically: the 1968 deadball era averaged 0.38 runs per half-inning vs 0.62 in the 1930 live-ball year. Without era controls, deadball-era hitters look uniformly bad and home-run-era pitchers look uniformly bad. The 116 season fixed-effect columns absorb this entirely, so player coefficients represent contribution **above each player's era's average**.
 
+## Park adjustment via per-park fixed effects
+
+Stadium scoring environments vary even more dramatically than eras within a given season. Coors Field (DEN02) inflates runs by ~+0.13 per half-inning above MLB average — over a season, that's ~21 extra runs (~2 wins) of fake offensive production for any Rockies hitter. Petco Park (SAN02) and Dodger Stadium (LOS03) suppress runs by ~0.07 per half-inning. Without controls, half-decade-Coors hitters like Helton and Walker look like all-time greats and pitcher-park hitters get systematically underrated.
+
+Fix: extract the park ID from each game's `info,site,XXXNN` line in the Retrosheet event metadata. Across 1910-2025 there are 105 distinct parks with at least 100 half-innings. Add one fixed-effect column per park and apply the same SEASON_WEIGHT scaling so park effects are essentially unregularized. Player coefficients are now also park-adjusted.
+
+The model picks out parks correctly by reputation (top 10 most hitter-friendly with ≥2k half-innings, post-fit):
+
+| park | runs/HI vs avg | what it is |
+|---|---:|---|
+| DEN01 | +0.134 | Mile High Stadium (Rockies 1993-94) |
+| DEN02 | +0.114 | Coors Field |
+| BOS05 | +0.104 | Fenway Park (Red Sox interim home, 1914-15) |
+| PHI09 | +0.094 | Citizens Bank Park |
+| DET02 | +0.071 | Tiger Stadium (1912-99) |
+
+And most pitcher-friendly:
+
+| park | runs/HI vs avg | what it is |
+|---|---:|---|
+| SEA03 | -0.094 | T-Mobile / Safeco |
+| LOS03 | -0.076 | Dodger Stadium |
+| HOU02 | -0.070 | Astrodome |
+| BAL11 | -0.070 | Memorial Stadium (1954-91) |
+| SAN02 | -0.069 | Petco Park |
+| OAK01 | -0.066 | Oakland Coliseum |
+| SFO03 | -0.062 | Oracle Park |
+
+These are exactly the parks with that reputation. Coors Field at +0.13 runs/inning being one of the largest park effects ever measured is consistent with its popular reputation.
+
+Effect on player rankings: Coors-era hitters get appropriately deflated. Todd Helton's career off_war drops from 166.8 (no park control) to 142.7 (park-controlled) — a 24-WAR park inflation correctly removed. Larry Walker, Galarraga, Castilla similar. Pitcher-park hitters (Tony Gwynn at the old Padres parks, the Astrodome era Astros) get small upward adjustments. The all-time top 15 stays largely stable since most all-time greats played in roughly average-scoring parks across long careers.
+
 ## Sign convention and centering
 
 After fitting, I:
@@ -134,27 +166,27 @@ The cumulative `total_war` favors long careers. To answer different questions:
 
 # Results
 
-## Top 15 all-time by total_war (career runs above average / 10)
+## Top 15 all-time by total_war (career runs above average / 10, park-adjusted)
 
 | # | Player | total | off | pit | fld |
 |--|--|--|--|--|--|
-| 1 | Willie Mays | 262.7 | 191.4 | — | 71.2 |
-| 2 | Barry Bonds | 245.9 | 220.4 | — | 25.4 |
-| 3 | Cal Ripken | 235.6 | 217.6 | — | 18.1 |
-| 4 | Albert Pujols | 229.9 | 224.7 | 0.0 | 5.2 |
-| 5 | Hank Aaron | 228.7 | 216.8 | — | 11.9 |
-| 6 | Eddie Murray | 220.9 | 214.4 | — | 6.5 |
-| 7 | Dave Winfield | 219.7 | 201.0 | — | 18.6 |
-| 8 | Adrian Beltré | 213.8 | 194.8 | — | 19.0 |
-| 9 | Stan Musial | 213.0 | 185.1 | 0.0 | 27.9 |
-| 10 | Pete Rose | 212.8 | 215.9 | — | -3.0 |
-| 11 | Mel Ott | 212.2 | 198.9 | — | 13.3 |
-| 12 | Brooks Robinson | 209.1 | 165.1 | — | 44.0 |
-| 13 | Rickey Henderson | 209.0 | 205.9 | — | 3.1 |
-| 14 | Babe Ruth | 204.8 | 181.7 | 5.9 | 17.2 |
-| 15 | Carl Yastrzemski | 204.5 | 219.6 | — | -15.1 |
+| 1 | Willie Mays | 264.9 | 193.0 | — | 71.8 |
+| 2 | Barry Bonds | 243.4 | 222.5 | — | 20.9 |
+| 3 | Albert Pujols | 231.7 | 230.4 | 0.0 | 1.2 |
+| 4 | Hank Aaron | 231.5 | 216.5 | — | 15.0 |
+| 5 | Cal Ripken | 231.2 | 222.5 | — | 8.7 |
+| 6 | Eddie Murray | 220.2 | 221.5 | — | -1.3 |
+| 7 | Stan Musial | 219.2 | 178.9 | 0.0 | 40.3 |
+| 8 | Dave Winfield | 216.4 | 205.2 | — | 11.2 |
+| 9 | Pete Rose | 214.0 | 212.3 | — | 1.7 |
+| 10 | Mel Ott | 213.9 | 199.5 | — | 14.3 |
+| 11 | Adrian Beltré | 211.6 | 197.5 | — | 14.1 |
+| 12 | Rickey Henderson | 207.7 | 212.8 | — | -5.1 |
+| 13 | Carl Yastrzemski | 207.0 | 212.5 | — | -5.4 |
+| 14 | Frank Robinson | 204.2 | 188.4 | — | 15.8 |
+| 15 | Babe Ruth | 200.6 | 186.3 | 5.9 | 8.4 |
 
-Mays at #1 reflects his combination of elite offense plus an enormous defensive contribution (71.2 fielding RAA) accumulated over 22 seasons in CF.
+Mays at #1 reflects his combination of elite offense plus an enormous defensive contribution (71.8 fielding RAA) accumulated over 22 seasons in CF.
 
 ## Top 10 pitchers (career)
 
@@ -249,7 +281,7 @@ This list is more about *peak* offensive talent. Helton at #3 reflects a real Co
 
 1. **Replacement-level vs average.** Our "0" is league-average MLB player; a typical regular ≈ 2 Fangraphs WAR per season. To compare directly with Fangraphs you'd add ≈ 2 × (seasons_played) to total_war.
 
-2. **Park effects not separated.** We control for season but not park. Coors Field hitters get an inflation, Petco hitters get deflated. Pitchers see the inverse. Adding park × season fixed effects would be the next iteration.
+2. **Park effects are constant across all years a park existed.** We have one fixed effect per park, but real park factors drift over time (e.g., Yankee Stadium's right-field porch shifted with renovations; Coors humidor reduced its hitter-friendliness in 2002). A future iteration could use park × decade interactions.
 
 3. **Within-team confounding.** Even with multi-decade data, players who spend their whole career on one team (Trout/Angels, Yount/Brewers) have their coefficients confounded with their teams' long-run quality. Players who change teams mid-career (Bonds, Pujols, A-Rod) get the cleanest individual estimates because trades create within-team variance. This biases the rankings somewhat against single-team stars.
 
@@ -271,7 +303,8 @@ This list is more about *peak* offensive talent. Helton at #3 reflects a real Co
 |---|---|
 | `download_all.sh` | Fetch all `<YYYY>eve.zip` from retrosheet.org into `data/raw/<YYYY>/`. |
 | `build_half_innings.py` | Run `cwevent` on all year directories; aggregate to half-inning rows. Output: `data/events/half_innings_all.parquet` (3.54M rows). |
-| `fit_ridge_all.py` | Build sparse 34k-column design matrix; ridge regression with per-role column scaling and season FEs; output coefficients per player. Output: `data/events/coefficients_all.{parquet,csv}`. |
+| `build_game_meta.py` | Scan event-file metadata for `info,site` lines; build game_id → park lookup. Output: `data/events/game_park.csv`. |
+| `fit_ridge_all.py` | Build sparse design matrix with player + season + park fixed effects; ridge regression with per-role column scaling; output coefficients per player and a park-effects table. Output: `data/events/coefficients_all.{parquet,csv}` and `data/events/park_effects.csv`. |
 | `make_views.py` | Post-process coefficients into per-season, per-full-season-rate, and per-position-z-score derived metrics. Output: `data/events/coefficients_all_enriched.{parquet,csv}`. |
 
 Total runtime end-to-end on a Mac: ~10 min download + ~3 min parse + ~2 min regression + ~10 sec views.

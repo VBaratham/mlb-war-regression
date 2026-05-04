@@ -1,14 +1,15 @@
 """All-time ridge regression: career-average per-player coefficient,
-era-adjusted via per-season fixed effects.
+era-adjusted via per-season fixed effects, park-adjusted via per-park FEs.
 
 For each half-inning we have:
   runs_scored ~ off_indicators + pit_indicators + fld_indicators
-                + season_intercept + home_indicator
+                + season_intercept + park_intercept + home_indicator
 
 Player coefs (offense / pitcher / fielder) are career-long averages weighted
 by where the player played their innings. Season fixed effects absorb era
-scoring environment so a 1968 deadball-era hitter isn't punished for low
-team scoring.
+scoring environment; park fixed effects absorb stadium effects (Coors,
+Petco, Fenway, etc.) so a Rockies hitter isn't credited with park-inflated
+production.
 """
 import numpy as np
 import pandas as pd
@@ -18,12 +19,23 @@ from sklearn.linear_model import Ridge
 
 ROOT = Path(__file__).parent
 HALF = ROOT / "data" / "events" / "half_innings_all.parquet"
+PARK = ROOT / "data" / "events" / "game_park.csv"
 OUT = ROOT / "data" / "events" / "coefficients_all.parquet"
 
 print("loading half-innings...")
 df = pd.read_parquet(HALF)
 print(f"{len(df):,} half-innings, {df.SEASON.nunique()} seasons "
       f"({df.SEASON.min()}-{df.SEASON.max()})")
+
+# Merge park IDs.
+print("loading park lookup...")
+park_lookup = pd.read_csv(PARK)
+df = df.merge(park_lookup, on="GAME_ID", how="left")
+n_missing = df["PARK"].isna().sum()
+if n_missing:
+    print(f"  warning: {n_missing:,} half-innings missing park (filling with 'UNK')")
+    df["PARK"] = df["PARK"].fillna("UNK")
+print(f"  {df.PARK.nunique()} unique parks")
 
 # Collect role player sets.
 print("indexing players...")
@@ -45,21 +57,28 @@ print(f"  {n_off:,} batters, {n_pit:,} pitchers, {n_fld:,} fielders")
 seasons = sorted(df.SEASON.unique())
 season_idx = {s: i + n_off + n_pit + n_fld for i, s in enumerate(seasons)}
 n_seasons = len(seasons)
-home_col = n_off + n_pit + n_fld + n_seasons
+
+parks = sorted(df.PARK.unique())
+park_offset = n_off + n_pit + n_fld + n_seasons
+park_idx = {p: i + park_offset for i, p in enumerate(parks)}
+n_parks = len(parks)
+
+home_col = park_offset + n_parks
 n_cols = home_col + 1
-print(f"  {n_seasons} season FE columns")
+print(f"  {n_seasons} season FE columns, {n_parks} park FE columns")
 print(f"design matrix: {len(df):,} rows × {n_cols:,} cols")
 
 # Build sparse matrix incrementally; for memory, pre-size arrays.
 print("building sparse matrix...")
-# Estimate nnz: each row has avg 4 batters + 1 pitcher + 8 fielders + 1 season + ~0.5 home = ~14 entries
-est_nnz = len(df) * 16
+# Estimate nnz: each row has avg 4 batters + 1 pitcher + 8 fielders + 1 season + 1 park + ~0.5 home = ~16 entries
+est_nnz = len(df) * 18
 rows_arr = np.empty(est_nnz, dtype=np.int32)
 cols_arr = np.empty(est_nnz, dtype=np.int32)
 k = 0
-for i, (b, p_, f_, h, ssn) in enumerate(zip(
+for i, (b, p_, f_, h, ssn, prk) in enumerate(zip(
         df["batters"].values, df["pitchers"].values,
-        df["fielders"].values, df["BAT_HOME_ID"].values, df["SEASON"].values)):
+        df["fielders"].values, df["BAT_HOME_ID"].values,
+        df["SEASON"].values, df["PARK"].values)):
     if b:
         for p in b.split("|"):
             if p:
@@ -73,6 +92,7 @@ for i, (b, p_, f_, h, ssn) in enumerate(zip(
             if p:
                 rows_arr[k] = i; cols_arr[k] = fld_idx[p]; k += 1
     rows_arr[k] = i; cols_arr[k] = season_idx[ssn]; k += 1
+    rows_arr[k] = i; cols_arr[k] = park_idx[prk]; k += 1
     if h == 1:
         rows_arr[k] = i; cols_arr[k] = home_col; k += 1
     if i % 200_000 == 0 and i > 0:
@@ -89,10 +109,11 @@ print(f"X: {X.shape}, nnz={X.nnz:,}")
 PIT_WEIGHT = 6.0
 col_scale = np.ones(n_cols, dtype=np.float32)
 col_scale[n_off:n_off + n_pit] = PIT_WEIGHT
-# Season FE columns also get larger weight -- they should be free to absorb
-# era effects without ridge shrinking them toward zero.
+# Season + park FE columns get larger weight -- they should be free to absorb
+# era and stadium effects without ridge shrinking them toward zero.
 SEASON_WEIGHT = 50.0
-col_scale[n_off + n_pit + n_fld:home_col] = SEASON_WEIGHT
+col_scale[n_off + n_pit + n_fld:park_offset] = SEASON_WEIGHT  # season cols
+col_scale[park_offset:home_col] = SEASON_WEIGHT  # park cols
 X = X.multiply(col_scale[np.newaxis, :]).tocsr()
 
 # Fit ridge. With 6M+ rows, calibration sweep is expensive; pick a calibrated
@@ -114,9 +135,26 @@ coefs = model.coef_.copy()
 off_slice = coefs[:n_off]
 pit_slice = coefs[n_off:n_off + n_pit]
 fld_slice = coefs[n_off + n_pit:n_off + n_pit + n_fld]
+park_slice = coefs[park_offset:home_col]
 print(f"raw off coef: mean={off_slice.mean():.4f} sd={off_slice.std():.4f}")
 print(f"raw pit coef: mean={pit_slice.mean():.4f} sd={pit_slice.std():.4f}")
 print(f"raw fld coef: mean={fld_slice.mean():.4f} sd={fld_slice.std():.4f}")
+print(f"park coef: mean={park_slice.mean():.4f} sd={park_slice.std():.4f}")
+
+# Save park effects table for inspection.
+park_appearances = df.groupby("PARK").size().rename("half_innings")
+park_df = pd.DataFrame({
+    "park": parks,
+    "park_runs_per_inning": park_slice,
+    "half_innings": [park_appearances.get(p, 0) for p in parks],
+})
+# Filter to parks with substantial usage and show extremes.
+substantial = park_df[park_df.half_innings >= 2000].sort_values("park_runs_per_inning")
+print("\nbottom 10 hitter-friendliness parks (most pitcher-friendly, min 2000 HI):")
+print(substantial.head(10).to_string(index=False))
+print("\ntop 10 hitter-friendliness parks (most hitter-friendly, min 2000 HI):")
+print(substantial.tail(10).to_string(index=False))
+park_df.to_csv(ROOT / "data" / "events" / "park_effects.csv", index=False)
 
 # Center role coefs (intercept absorbs the constant).
 coefs[:n_off] = off_slice - off_slice.mean()

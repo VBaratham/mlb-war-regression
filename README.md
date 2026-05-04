@@ -4,25 +4,25 @@ A wins-above-replacement-style baseball metric computed by **direct ridge regres
 
 The methodology is regularized adjusted plus-minus (RAPM, well-known from basketball) adapted to baseball. See [REPORT.md](REPORT.md) for the full writeup, including all design choices, calibration, and caveats.
 
-## Top 15 all-time
+## Top 15 all-time (park-adjusted)
 
 | # | Player | total_war | off | pit | fld |
 |--|--|--|--|--|--|
-| 1 | Willie Mays | 262.7 | 191.4 | — | 71.2 |
-| 2 | Barry Bonds | 245.9 | 220.4 | — | 25.4 |
-| 3 | Cal Ripken | 235.6 | 217.6 | — | 18.1 |
-| 4 | Albert Pujols | 229.9 | 224.7 | 0.0 | 5.2 |
-| 5 | Hank Aaron | 228.7 | 216.8 | — | 11.9 |
-| 6 | Eddie Murray | 220.9 | 214.4 | — | 6.5 |
-| 7 | Dave Winfield | 219.7 | 201.0 | — | 18.6 |
-| 8 | Adrian Beltré | 213.8 | 194.8 | — | 19.0 |
-| 9 | Stan Musial | 213.0 | 185.1 | 0.0 | 27.9 |
-| 10 | Pete Rose | 212.8 | 215.9 | — | -3.0 |
-| 11 | Mel Ott | 212.2 | 198.9 | — | 13.3 |
-| 12 | Brooks Robinson | 209.1 | 165.1 | — | 44.0 |
-| 13 | Rickey Henderson | 209.0 | 205.9 | — | 3.1 |
-| 14 | Babe Ruth | 204.8 | 181.7 | 5.9 | 17.2 |
-| 15 | Carl Yastrzemski | 204.5 | 219.6 | — | -15.1 |
+| 1 | Willie Mays | 264.9 | 193.0 | — | 71.8 |
+| 2 | Barry Bonds | 243.4 | 222.5 | — | 20.9 |
+| 3 | Albert Pujols | 231.7 | 230.4 | 0.0 | 1.2 |
+| 4 | Hank Aaron | 231.5 | 216.5 | — | 15.0 |
+| 5 | Cal Ripken | 231.2 | 222.5 | — | 8.7 |
+| 6 | Eddie Murray | 220.2 | 221.5 | — | -1.3 |
+| 7 | Stan Musial | 219.2 | 178.9 | 0.0 | 40.3 |
+| 8 | Dave Winfield | 216.4 | 205.2 | — | 11.2 |
+| 9 | Pete Rose | 214.0 | 212.3 | — | 1.7 |
+| 10 | Mel Ott | 213.9 | 199.5 | — | 14.3 |
+| 11 | Adrian Beltré | 211.6 | 197.5 | — | 14.1 |
+| 12 | Rickey Henderson | 207.7 | 212.8 | — | -5.1 |
+| 13 | Carl Yastrzemski | 207.0 | 212.5 | — | -5.4 |
+| 14 | Frank Robinson | 204.2 | 188.4 | — | 15.8 |
+| 15 | Babe Ruth | 200.6 | 186.3 | 5.9 | 8.4 |
 
 Each player has up to three coefficients: offense (when batting), pitcher (when pitching), fielder (when fielding a non-pitcher position). Numbers are runs above MLB-average / 10, summed over the player's career. Note that "0 = average MLB regular," not "replacement," so totals run ~1.5–2× higher than Fangraphs WAR — the *ranking* is what's meaningful.
 
@@ -39,10 +39,13 @@ bash download_all.sh
 # 2. Parse events and aggregate to half-inning rows (~3 min)
 python3 build_half_innings.py
 
-# 3. Fit ridge regression on full dataset (~2 min)
+# 3. Extract game→park lookup from event metadata (~10 sec)
+python3 build_game_meta.py
+
+# 4. Fit ridge regression with player + season + park fixed effects (~2 min)
 python3 fit_ridge_all.py
 
-# 4. Compute per-season, peak-rate, and per-position-z-score views
+# 5. Compute per-season, peak-rate, and per-position-z-score views
 python3 make_views.py
 ```
 
@@ -56,7 +59,8 @@ Output leaderboards are checked in under `data/events/`:
 |---|---|
 | `download_all.sh` | Fetch all `<YYYY>eve.zip` from retrosheet.org. |
 | `build_half_innings.py` | Run `cwevent` on all year directories; aggregate to half-inning rows. |
-| `fit_ridge_all.py` | Build sparse 34k-column design matrix; ridge regression with per-role column scaling and season fixed effects. |
+| `build_game_meta.py` | Scan event metadata for `info,site` lines; build a game-id → park lookup. |
+| `fit_ridge_all.py` | Build sparse design matrix with player + season + park fixed effects; ridge regression with per-role column scaling. |
 | `fit_ridge.py` | Earlier single-season (2024-only) version of the regression, kept for reference. |
 | `make_views.py` | Post-process coefficients into per-season, full-season-rate, and per-position-z-score derived metrics. |
 | `REPORT.md` | Full methodology and results writeup. |
