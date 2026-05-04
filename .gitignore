@@ -1,0 +1,21 @@
+# Raw Retrosheet event files (~900MB; reproducible via download_all.sh)
+data/raw/
+
+# Intermediate parsed events (~2.4GB; reproducible via build_half_innings.py)
+data/events/events_all.csv
+data/events/events_2024.csv
+
+# Half-inning aggregations (large, reproducible)
+data/events/half_innings_all.parquet
+data/events/half_innings_2024.parquet
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Editor
+.DS_Store
+.idea/
+.vscode/
