@@ -7,6 +7,28 @@
 // raw.githubusercontent.com URL for the events dir.
 const DATA_BASE = "../data/events/";
 
+// Retrosheet uses team codes that differ from the common modern abbrevs
+// (NYA = Yankees, NYN = Mets, etc.). Translate at display time so the
+// underlying data keeps its retro identifiers.
+const TEAM_DISPLAY = {
+  NYA: "NYY",   // Yankees
+  NYN: "NYM",   // Mets
+  ANA: "LAA",   // Angels
+  CHA: "CWS",   // White Sox
+  CHN: "CHC",   // Cubs
+  LAN: "LAD",   // Dodgers
+  SDN: "SDP",   // Padres
+  SFN: "SFG",   // Giants
+  TBA: "TBR",   // Rays
+  KCA: "KCR",   // Royals
+  SLN: "STL",   // Cardinals
+  WAS: "WSN",   // Nationals
+};
+
+function displayTeam(t) {
+  return TEAM_DISPLAY[t] || t;
+}
+
 const SNAPSHOT_TOP_N_DEFAULT = 10;
 const TABLE_PAGE = 200;
 
@@ -48,21 +70,25 @@ function populateViewSelector() {
   if (state.manifest.all_time) {
     sel.append(new Option(state.manifest.all_time.label, "all_time"));
   }
-  if (state.manifest.current_season) {
-    sel.append(new Option(state.manifest.current_season.label, "current"));
-  }
-  if (state.manifest.season_index && state.manifest.season_index.seasons.length) {
-    sel.append(new Option("Single season", "season"));
+  if (state.manifest.season_index) {
+    const seasons = [...state.manifest.season_index.seasons].sort((a, b) => b - a);
+    const cs = state.manifest.current_season;
+    const currentYear = cs ? cs.season : null;
+    const latestSnapDate = (cs && cs.snapshots && cs.snapshots.length)
+      ? cs.snapshots[cs.snapshots.length - 1].date
+      : null;
+    seasons.forEach(y => {
+      let label = String(y);
+      if (y === currentYear && latestSnapDate) {
+        const md = latestSnapDate.slice(5).replace("-", "/");  // "MM/DD"
+        label = `${y} (through ${md})`;
+      }
+      sel.append(new Option(label, `season:${y}`));
+    });
   }
   if (!sel.options.length) {
     sel.append(new Option("(no data)", ""));
     sel.disabled = true;
-  }
-  const seasonSel = document.getElementById("season");
-  seasonSel.innerHTML = "";
-  if (state.manifest.season_index) {
-    const seasons = [...state.manifest.season_index.seasons].sort((a, b) => b - a);
-    seasons.forEach(y => seasonSel.append(new Option(String(y), String(y))));
   }
 }
 
@@ -72,18 +98,23 @@ async function ensureSeasonWarLoaded() {
   state.seasonWar = await loadCSV(state.manifest.season_index.file);
 }
 
-async function switchView(view) {
-  state.view = view;
-  document.getElementById("season-picker").hidden = view !== "season";
+async function switchView(viewKey) {
+  if (viewKey === "all_time") {
+    state.view = "all_time";
+    state.seasonYear = null;
+    state.data = await loadCSV(state.manifest.all_time.leaderboard);
+    state.snapshots = null;
+  } else if (viewKey.startsWith("season:")) {
+    state.view = "season";
+    state.seasonYear = parseInt(viewKey.split(":")[1]);
+    await ensureSeasonWarLoaded();
+    state.data = state.seasonWar.filter(r => Number(r.season) === state.seasonYear);
 
-  if (view === "all_time" || view === "current") {
-    const node = view === "all_time"
-      ? state.manifest.all_time
-      : state.manifest.current_season;
-    if (!node) return;
-    state.data = await loadCSV(node.leaderboard);
-    if (view === "current" && node.snapshots && node.snapshots.length) {
-      const entries = await Promise.all(node.snapshots.map(async s => {
+    // Snapshots only exist for the in-progress current season; if we're
+    // viewing that year, fetch them so the WAR-over-time chart shows up.
+    const cs = state.manifest.current_season;
+    if (cs && cs.season === state.seasonYear && cs.snapshots && cs.snapshots.length) {
+      const entries = await Promise.all(cs.snapshots.map(async s => {
         try {
           return [s.date, await loadCSV(s.file)];
         } catch (e) {
@@ -95,29 +126,17 @@ async function switchView(view) {
     } else {
       state.snapshots = null;
     }
-  } else if (view === "season") {
-    await ensureSeasonWarLoaded();
-    const seasons = state.manifest.season_index.seasons;
-    if (state.seasonYear === null || !seasons.includes(state.seasonYear)) {
-      state.seasonYear = Math.max(...seasons);
-      document.getElementById("season").value = String(state.seasonYear);
-    }
-    state.data = state.seasonWar.filter(r => Number(r.season) === state.seasonYear);
-    state.snapshots = null;
   }
 
-  const chartVisible = view === "current"
+  const chartVisible = state.view === "season"
     && state.snapshots
     && Object.keys(state.snapshots).length >= 1;
   document.getElementById("chart-section").hidden = !chartVisible;
 
-  // Sensible default min-innings per view: all-time benefits from a higher
-  // floor (so the table isn't dominated by 19th-century cup-of-coffee guys);
-  // single seasons need a much lower floor since players accumulate few innings.
-  let target;
-  if (view === "all_time") target = 1500;
-  else if (view === "season") target = 100;
-  else target = 50;
+  // Sensible default min-innings: all-time wants a higher floor so the table
+  // isn't dominated by 19th-century cup-of-coffee guys; single seasons need
+  // a much lower floor since players accumulate few innings.
+  const target = state.view === "all_time" ? 1500 : 100;
   state.filters.minInn = target;
   document.getElementById("min-inn").value = target;
 
@@ -169,10 +188,6 @@ function hookControls() {
   $("load-more").addEventListener("click", () => {
     state.visibleLimit += TABLE_PAGE;
     render();
-  });
-  $("season").addEventListener("change", async e => {
-    state.seasonYear = parseInt(e.target.value);
-    await switchView("season");
   });
   document.querySelector("#leaderboard tbody").addEventListener("click", e => {
     const tr = e.target.closest("tr[data-player-id]");
@@ -241,7 +256,9 @@ async function openPlayerDetail(playerId) {
     career.name || rows[0].name || playerId;
   const teams = (career.teams || career.team || "").split("|").filter(Boolean);
   const teamLabel = teams.length
-    ? teams.map(t => t === career.team ? `<strong>${escapeHtml(t)}</strong>` : escapeHtml(t)).join(", ")
+    ? teams.map(t => t === career.team
+        ? `<strong>${escapeHtml(displayTeam(t))}</strong>`
+        : escapeHtml(displayTeam(t))).join(", ")
     : "";
   document.getElementById("player-modal-sub").innerHTML =
     `${escapeHtml(career.pos || "")} &middot; ${teamLabel} &middot; ` +
@@ -314,8 +331,8 @@ function renderTeams(r) {
   if (!list.length) return "";
   return list
     .map(t => t === modal
-      ? `<strong>${escapeHtml(t)}</strong>`
-      : escapeHtml(t))
+      ? `<strong>${escapeHtml(displayTeam(t))}</strong>`
+      : escapeHtml(displayTeam(t)))
     .join(", ");
 }
 
@@ -431,7 +448,7 @@ function renderChart() {
 
 function render() {
   renderTable();
-  if (state.view === "current" && state.snapshots) renderChart();
+  if (state.view === "season" && state.snapshots) renderChart();
 }
 
 function applyTheme(theme) {
