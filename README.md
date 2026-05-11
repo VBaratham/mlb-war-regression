@@ -4,6 +4,8 @@ A wins-above-replacement-style baseball metric computed by **direct ridge regres
 
 The methodology is regularized adjusted plus-minus (RAPM, well-known from basketball) adapted to baseball. See [REPORT.md](REPORT.md) for the full writeup, including all design choices, calibration, and caveats.
 
+**[Browse the leaderboards interactively →](https://vbaratham.github.io/mlb-war-regression/webapp/)** (all-time + current season with a WAR-over-time chart, refreshed daily)
+
 ## Top 15 all-time (park-adjusted)
 
 | # | Player | total_war | off | pit | fld |
