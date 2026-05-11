@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-11T10:39:01Z",
+  "generated_at": "2026-05-11T10:45:39Z",
   "all_time": {
     "tag": "all",
     "label": "All-time",
@@ -18,6 +18,190 @@
     "label": "2026 season",
     "leaderboard": "coefficients_2026_enriched.csv",
     "snapshots": [
+      {
+        "date": "2026-03-26",
+        "file": "snapshots/2026/2026-03-26.csv"
+      },
+      {
+        "date": "2026-03-27",
+        "file": "snapshots/2026/2026-03-27.csv"
+      },
+      {
+        "date": "2026-03-28",
+        "file": "snapshots/2026/2026-03-28.csv"
+      },
+      {
+        "date": "2026-03-29",
+        "file": "snapshots/2026/2026-03-29.csv"
+      },
+      {
+        "date": "2026-03-30",
+        "file": "snapshots/2026/2026-03-30.csv"
+      },
+      {
+        "date": "2026-03-31",
+        "file": "snapshots/2026/2026-03-31.csv"
+      },
+      {
+        "date": "2026-04-01",
+        "file": "snapshots/2026/2026-04-01.csv"
+      },
+      {
+        "date": "2026-04-02",
+        "file": "snapshots/2026/2026-04-02.csv"
+      },
+      {
+        "date": "2026-04-03",
+        "file": "snapshots/2026/2026-04-03.csv"
+      },
+      {
+        "date": "2026-04-04",
+        "file": "snapshots/2026/2026-04-04.csv"
+      },
+      {
+        "date": "2026-04-05",
+        "file": "snapshots/2026/2026-04-05.csv"
+      },
+      {
+        "date": "2026-04-06",
+        "file": "snapshots/2026/2026-04-06.csv"
+      },
+      {
+        "date": "2026-04-07",
+        "file": "snapshots/2026/2026-04-07.csv"
+      },
+      {
+        "date": "2026-04-08",
+        "file": "snapshots/2026/2026-04-08.csv"
+      },
+      {
+        "date": "2026-04-09",
+        "file": "snapshots/2026/2026-04-09.csv"
+      },
+      {
+        "date": "2026-04-10",
+        "file": "snapshots/2026/2026-04-10.csv"
+      },
+      {
+        "date": "2026-04-11",
+        "file": "snapshots/2026/2026-04-11.csv"
+      },
+      {
+        "date": "2026-04-12",
+        "file": "snapshots/2026/2026-04-12.csv"
+      },
+      {
+        "date": "2026-04-13",
+        "file": "snapshots/2026/2026-04-13.csv"
+      },
+      {
+        "date": "2026-04-14",
+        "file": "snapshots/2026/2026-04-14.csv"
+      },
+      {
+        "date": "2026-04-15",
+        "file": "snapshots/2026/2026-04-15.csv"
+      },
+      {
+        "date": "2026-04-16",
+        "file": "snapshots/2026/2026-04-16.csv"
+      },
+      {
+        "date": "2026-04-17",
+        "file": "snapshots/2026/2026-04-17.csv"
+      },
+      {
+        "date": "2026-04-18",
+        "file": "snapshots/2026/2026-04-18.csv"
+      },
+      {
+        "date": "2026-04-19",
+        "file": "snapshots/2026/2026-04-19.csv"
+      },
+      {
+        "date": "2026-04-20",
+        "file": "snapshots/2026/2026-04-20.csv"
+      },
+      {
+        "date": "2026-04-21",
+        "file": "snapshots/2026/2026-04-21.csv"
+      },
+      {
+        "date": "2026-04-22",
+        "file": "snapshots/2026/2026-04-22.csv"
+      },
+      {
+        "date": "2026-04-23",
+        "file": "snapshots/2026/2026-04-23.csv"
+      },
+      {
+        "date": "2026-04-24",
+        "file": "snapshots/2026/2026-04-24.csv"
+      },
+      {
+        "date": "2026-04-25",
+        "file": "snapshots/2026/2026-04-25.csv"
+      },
+      {
+        "date": "2026-04-26",
+        "file": "snapshots/2026/2026-04-26.csv"
+      },
+      {
+        "date": "2026-04-27",
+        "file": "snapshots/2026/2026-04-27.csv"
+      },
+      {
+        "date": "2026-04-28",
+        "file": "snapshots/2026/2026-04-28.csv"
+      },
+      {
+        "date": "2026-04-29",
+        "file": "snapshots/2026/2026-04-29.csv"
+      },
+      {
+        "date": "2026-04-30",
+        "file": "snapshots/2026/2026-04-30.csv"
+      },
+      {
+        "date": "2026-05-01",
+        "file": "snapshots/2026/2026-05-01.csv"
+      },
+      {
+        "date": "2026-05-02",
+        "file": "snapshots/2026/2026-05-02.csv"
+      },
+      {
+        "date": "2026-05-03",
+        "file": "snapshots/2026/2026-05-03.csv"
+      },
+      {
+        "date": "2026-05-04",
+        "file": "snapshots/2026/2026-05-04.csv"
+      },
+      {
+        "date": "2026-05-05",
+        "file": "snapshots/2026/2026-05-05.csv"
+      },
+      {
+        "date": "2026-05-06",
+        "file": "snapshots/2026/2026-05-06.csv"
+      },
+      {
+        "date": "2026-05-07",
+        "file": "snapshots/2026/2026-05-07.csv"
+      },
+      {
+        "date": "2026-05-08",
+        "file": "snapshots/2026/2026-05-08.csv"
+      },
+      {
+        "date": "2026-05-09",
+        "file": "snapshots/2026/2026-05-09.csv"
+      },
+      {
+        "date": "2026-05-10",
+        "file": "snapshots/2026/2026-05-10.csv"
+      },
       {
         "date": "2026-05-11",
         "file": "snapshots/2026/2026-05-11.csv"

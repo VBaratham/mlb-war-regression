@@ -99,11 +99,12 @@ def invalidate_year_cache(year: int) -> bool:
     return True
 
 
-def _events_from_feed(feed: dict, mlbam_to_retro: dict, season: int) -> list:
-    """Walk one game's plays and yield normalized event rows."""
+def _events_from_feed(feed: dict, mlbam_to_retro: dict, season: int):
+    """Walk one game's plays and yield normalized event rows + (park, date)."""
     game = feed.get("gameData", {})
     venue = game.get("venue", {}) or {}
     park_code = str(venue.get("id", "UNK"))
+    date_iso = (game.get("datetime", {}) or {}).get("officialDate", "")
     game_pk = str(game.get("game", {}).get("pk") or feed.get("gamePk", ""))
 
     all_plays = feed.get("liveData", {}).get("plays", {}).get("allPlays", [])
@@ -141,7 +142,7 @@ def _events_from_feed(feed: dict, mlbam_to_retro: dict, season: int) -> list:
             # field for each half-inning. Until then, leave all POS*_FLD_ID
             # empty -- aggregate_to_half_innings will emit fielders="".
         })
-    return rows, park_code, game_pk
+    return rows, park_code, game_pk, date_iso
 
 
 def _resolve_id(mlbam_id, mlbam_to_retro: dict) -> str:
@@ -165,13 +166,13 @@ def load_events_and_parks(years: range):
         print(f"  {y}: {len(pks)} final games")
         for i, pk in enumerate(pks):
             feed = _load_feed(pk, y)
-            rows, park_code, game_id = _events_from_feed(feed, mlbam_to_retro, y)
+            rows, park_code, game_id, date_iso = _events_from_feed(feed, mlbam_to_retro, y)
             all_events.extend(rows)
-            park_rows.append((game_id, park_code))
+            park_rows.append((game_id, park_code, date_iso))
             if i % 200 == 0 and i > 0:
                 print(f"    {i:,}/{len(pks)} games")
     events_df = pd.DataFrame(all_events)
-    parks_df = pd.DataFrame(park_rows, columns=["GAME_ID", "PARK"]).drop_duplicates("GAME_ID")
+    parks_df = pd.DataFrame(park_rows, columns=["GAME_ID", "PARK", "DATE"]).drop_duplicates("GAME_ID")
     return events_df, parks_df
 
 

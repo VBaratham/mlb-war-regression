@@ -33,8 +33,17 @@ python3 make_views.py --tag "$TAG"
 # own tag's parquet (since half_innings_all only goes through retro years).
 python3 fit_per_season.py --tag all --extra-tags "$TAG" --seasons "$SEASON"
 
-# Drop a dated snapshot and update the manifest the webapp reads.
-python3 snapshot.py --tag "$TAG"
+# Backfill per-day WAR snapshots: refit on games-through-D for every date
+# D in this season we haven't snapshotted yet. Cheap per-day (~0.2s each)
+# and fills in any days the cron missed (after a downtime, say).
+python3 compute_snapshot.py --tag "$TAG"
+
+# Regenerate the manifest the webapp reads (lists all snapshot dates etc.).
+python3 snapshot.py --update-manifest-only
+
+# Carry over the latest snapshot's data into career_seasons_sum_all by
+# replacing the current-year rows in season_war_all. Already done above by
+# fit_per_season, which also produces the career roll-up file.
 
 # Stage only the lightweight CSVs / manifest. Half-inning parquets and feed
 # caches are .gitignore'd. Force-add coefficients_*.csv since the
@@ -46,6 +55,7 @@ git add -f \
     data/events/coefficients_all_enriched.csv 2>/dev/null || true
 git add -f data/events/snapshots/"$TAG"/*.csv 2>/dev/null || true
 git add -f data/events/season_war_all.csv 2>/dev/null || true
+git add -f data/events/career_seasons_sum_all.csv 2>/dev/null || true
 git add -f data/events/manifest.json
 
 if git diff --cached --quiet; then

@@ -119,7 +119,11 @@ def load_events(raw_dir: Path, years: range) -> pd.DataFrame:
 
 
 def load_parks(raw_dir: Path, years: range) -> pd.DataFrame:
-    """Scan event files for `info,site,XXX` lines → GAME_ID,PARK rows."""
+    """Scan event files for `info,site,XXX` lines → GAME_ID,PARK,DATE rows.
+
+    Retrosheet GAME_IDs encode the calendar date (positions 3:11 = YYYYMMDD).
+    We also surface it as a separate column so downstream date-filtering
+    doesn't have to parse the ID."""
     records = []
     for y in years:
         ydir = raw_dir / str(y)
@@ -132,9 +136,17 @@ def load_parks(raw_dir: Path, years: range) -> pd.DataFrame:
                     if line.startswith("id,"):
                         current_id = line[3:].strip()
                     elif line.startswith("info,site,") and current_id:
-                        records.append((current_id, line[len("info,site,"):].strip()))
+                        site = line[len("info,site,"):].strip()
+                        date_iso = ""
+                        if len(current_id) >= 11:
+                            y8 = current_id[3:11]
+                            try:
+                                date_iso = f"{y8[:4]}-{y8[4:6]}-{y8[6:8]}"
+                            except Exception:
+                                pass
+                        records.append((current_id, site, date_iso))
                         current_id = None
-    return pd.DataFrame(records, columns=["GAME_ID", "PARK"])
+    return pd.DataFrame(records, columns=["GAME_ID", "PARK", "DATE"])
 
 
 def load_rosters(raw_dir: Path, years: range) -> pd.DataFrame:
