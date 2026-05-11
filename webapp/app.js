@@ -361,9 +361,10 @@ function renderTable() {
       <td class="num">${r.last_year_played || r.last_year || ""}</td>
     </tr>`).join("");
 
-  const title = state.view === "all_time"
-    ? state.manifest.all_time.label
-    : state.manifest.current_season.label;
+  let title;
+  if (state.view === "all_time") title = state.manifest.all_time.label;
+  else if (state.view === "season") title = `${state.seasonYear} season`;
+  else title = state.manifest.current_season.label;
   document.getElementById("table-title").textContent =
     `${title} — ${rows.length.toLocaleString()} qualifiers ` +
     `(showing ${shown.toLocaleString()})`;
