@@ -278,10 +278,17 @@ function renderChart() {
     };
   });
 
+  const css = getComputedStyle(document.documentElement);
+  const fg = css.getPropertyValue("--fg").trim() || "#1a1a1a";
+  const bg = css.getPropertyValue("--bg").trim() || "#ffffff";
+  const gridc = css.getPropertyValue("--border").trim() || "#d8d8d8";
   Plotly.react("chart", traces, {
     margin: { t: 20, l: 50, r: 20, b: 50 },
-    xaxis: { title: "date", type: "category" },
-    yaxis: { title: "cumulative WAR" },
+    paper_bgcolor: bg,
+    plot_bgcolor: bg,
+    font: { color: fg },
+    xaxis: { title: "date", type: "category", gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
+    yaxis: { title: "cumulative WAR", gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
     legend: { orientation: "h", y: -0.2 },
     hovermode: "closest",
   }, { responsive: true, displaylogo: false });
@@ -300,8 +307,39 @@ function render() {
   if (state.view === "current" && state.snapshots) renderChart();
 }
 
+function applyTheme(theme) {
+  // theme: "light" | "dark" | null (= follow system)
+  const root = document.documentElement;
+  if (theme) root.setAttribute("data-theme", theme);
+  else root.removeAttribute("data-theme");
+  const btn = document.getElementById("theme-toggle");
+  if (btn) btn.textContent = effectiveTheme() === "dark" ? "☀" : "🌙";
+  // Re-style any rendered Plotly chart for the new background.
+  if (state.snapshots && document.getElementById("chart-section") && !document.getElementById("chart-section").hidden) {
+    renderChart();
+  }
+}
+
+function effectiveTheme() {
+  const stored = document.documentElement.getAttribute("data-theme");
+  if (stored) return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function initTheme() {
+  const saved = localStorage.getItem("theme");
+  if (saved === "dark" || saved === "light") applyTheme(saved);
+  else applyTheme(null);
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    const next = effectiveTheme() === "dark" ? "light" : "dark";
+    localStorage.setItem("theme", next);
+    applyTheme(next);
+  });
+}
+
 async function init() {
   try {
+    initTheme();
     state.manifest = await loadManifest();
     document.getElementById("generated").textContent =
       `updated ${state.manifest.generated_at}`;

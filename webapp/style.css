@@ -5,6 +5,32 @@
   --border: #d8d8d8;
   --row-alt: #f5f7fa;
   --bg: #ffffff;
+  --chip-active-fg: #fff;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --fg: #e8e8e8;
+  --muted: #9aa3ad;
+  --accent: #6aa8ff;
+  --border: #2c3138;
+  --row-alt: #1b1f24;
+  --bg: #14171c;
+  --chip-active-fg: #0b0d10;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fg: #e8e8e8;
+    --muted: #9aa3ad;
+    --accent: #6aa8ff;
+    --border: #2c3138;
+    --row-alt: #1b1f24;
+    --bg: #14171c;
+    --chip-active-fg: #0b0d10;
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -53,6 +79,22 @@ nav#view-bar #generated {
   color: var(--muted);
   font-size: 0.85rem;
   margin-left: auto;
+}
+
+#theme-toggle {
+  font: inherit;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  width: 2rem;
+  height: 1.85rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+#theme-toggle:hover {
+  border-color: var(--accent);
 }
 
 #controls {
@@ -128,7 +170,7 @@ nav#view-bar select {
 
 .chip:has(input:checked) {
   background: var(--accent);
-  color: #fff;
+  color: var(--chip-active-fg);
   border-color: var(--accent);
 }
 

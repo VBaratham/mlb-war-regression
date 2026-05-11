@@ -170,14 +170,9 @@ print("\nbottom 10 hitter-friendliness parks (most pitcher-friendly, min 2000 HI
 print(substantial.head(10).to_string(index=False))
 print("\ntop 10 hitter-friendliness parks (most hitter-friendly, min 2000 HI):")
 print(substantial.tail(10).to_string(index=False))
-park_df.to_csv(ROOT / "data" / "events" / "park_effects.csv", index=False)
+park_df.to_csv(ROOT / "data" / "events" / f"park_effects_{TAG}.csv", index=False)
 
-# Center role coefs (intercept absorbs the constant).
-coefs[:n_off] = off_slice - off_slice.mean()
-coefs[n_off:n_off + n_pit] = pit_slice - pit_slice.mean()
-coefs[n_off + n_pit:n_off + n_pit + n_fld] = fld_slice - fld_slice.mean()
-
-# Appearance counts.
+# Appearance counts -- needed for the innings-weighted centering below.
 print("counting appearances...")
 off_counts = np.zeros(n_off, dtype=np.int32)
 pit_counts = np.zeros(n_pit, dtype=np.int32)
@@ -195,6 +190,27 @@ for b, p_, f_ in zip(df["batters"].values, df["pitchers"].values, df["fielders"]
         for p in f_.split("|"):
             if p:
                 fld_counts[fld_idx[p] - n_off - n_pit] += 1
+
+# Center role coefs against the innings-weighted role mean. Using a simple
+# mean is unsafe here because cup-of-coffee players are ridge-shrunk toward
+# the prior; their values drag the simple mean below where the actual
+# league-baseline lives, so regulars systematically read as worse-than-zero
+# (most visible on pitchers, who have wider coefs and a 3:1 scrub/regular
+# ratio). Innings-weighting makes "0 = average regular": the league-total
+# RAA in each role sums to exactly zero by construction.
+def _weighted_mean(coefs, weights):
+    w = weights.astype(np.float64)
+    s = w.sum()
+    return float((coefs.astype(np.float64) * w).sum() / s) if s > 0 else 0.0
+
+off_center = _weighted_mean(off_slice, off_counts)
+pit_center = _weighted_mean(pit_slice, pit_counts)
+fld_center = _weighted_mean(fld_slice, fld_counts)
+print(f"centering offsets (innings-weighted): "
+      f"off={off_center:.4f}  pit={pit_center:.4f}  fld={fld_center:.4f}")
+coefs[:n_off] = off_slice - off_center
+coefs[n_off:n_off + n_pit] = pit_slice - pit_center
+coefs[n_off + n_pit:n_off + n_pit + n_fld] = fld_slice - fld_center
 
 # Build player table.
 print("assembling output...")
