@@ -214,9 +214,26 @@ def _parse_seasons(spec):
     return out
 
 
+def _load_tag(tag: str):
+    """Return (half_innings_df, parks_df) for a single tag."""
+    half = pd.read_parquet(EVENTS / f"half_innings_{tag}.parquet")
+    half["GAME_ID"] = half["GAME_ID"].astype(str)
+    park_path = EVENTS / f"game_park_{tag}.csv"
+    if not park_path.exists() and tag == "all":
+        park_path = EVENTS / "game_park.csv"
+    parks = pd.read_csv(park_path, dtype={"GAME_ID": str})
+    return half, parks
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tag", default="all")
+    ap.add_argument("--tag", default="all",
+                    help="base dataset tag; output goes to season_war_<tag>.csv")
+    ap.add_argument("--extra-tags",
+                    help="comma-separated additional tags whose half-innings "
+                         "are unioned into the base before fitting. Used to "
+                         "pull current-season statsapi data (tag=2026) into "
+                         "the all-time table without rebuilding half_innings_all.")
     ap.add_argument("--seasons",
                     help="comma-separated list and/or YYYY-YYYY ranges. "
                          "Default: every season present in the tag's data.")
@@ -224,14 +241,21 @@ def main():
     TAG = args.tag
 
     print(f"loading half_innings_{TAG}.parquet...")
-    half = pd.read_parquet(EVENTS / f"half_innings_{TAG}.parquet")
-    half["GAME_ID"] = half["GAME_ID"].astype(str)
+    half, parks = _load_tag(TAG)
     print(f"  {len(half):,} half-innings, {half.SEASON.min()}-{half.SEASON.max()}")
 
-    park_path = EVENTS / f"game_park_{TAG}.csv"
-    if not park_path.exists():
-        park_path = EVENTS / "game_park.csv"
-    parks = pd.read_csv(park_path, dtype={"GAME_ID": str})
+    if args.extra_tags:
+        for extra in args.extra_tags.split(","):
+            extra = extra.strip()
+            if not extra:
+                continue
+            print(f"  unioning extra half_innings_{extra}.parquet...")
+            extra_half, extra_parks = _load_tag(extra)
+            half = pd.concat([half, extra_half], ignore_index=True)
+            parks = pd.concat([parks, extra_parks], ignore_index=True).drop_duplicates("GAME_ID")
+            print(f"  +{len(extra_half):,} half-innings (now "
+                  f"{half.SEASON.min()}-{half.SEASON.max()})")
+
     half = half.merge(parks, on="GAME_ID", how="left")
     half["PARK"] = half["PARK"].fillna("UNK")
 

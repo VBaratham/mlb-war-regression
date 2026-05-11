@@ -236,7 +236,7 @@ function rankedRows() {
   return rows;
 }
 
-function fmt(v, digits = 1) {
+function fmt(v, digits = 2) {
   if (v == null || v === "" || isNaN(v)) return "";
   return Number(v).toFixed(digits);
 }

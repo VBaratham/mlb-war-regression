@@ -26,10 +26,12 @@ python3 build_dataset.py --years "$SEASON" --tag "$TAG"
 python3 fit_ridge_all.py --tag "$TAG"
 python3 make_views.py --tag "$TAG"
 
-# Per-season fit. We update the current season's rows inside the all-time
+# Per-season fit. Updates the current season's rows inside the all-time
 # season_war table (incremental: replaces just that year's entries) so the
 # webapp's season-view + player-detail panel see fresh data each day.
-python3 fit_per_season.py --tag all --seasons "$SEASON"
+# --extra-tags unions in the current-year half-innings that live in their
+# own tag's parquet (since half_innings_all only goes through retro years).
+python3 fit_per_season.py --tag all --extra-tags "$TAG" --seasons "$SEASON"
 
 # Drop a dated snapshot and update the manifest the webapp reads.
 python3 snapshot.py --tag "$TAG"
