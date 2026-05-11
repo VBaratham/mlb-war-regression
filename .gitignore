@@ -10,6 +10,9 @@ data/events/half_innings_*.parquet
 # Loader fetch caches (Chadwick register, MLB Stats API feed JSON)
 data/cache/
 
+# Cron output
+refresh.log
+
 # Python
 __pycache__/
 *.pyc
