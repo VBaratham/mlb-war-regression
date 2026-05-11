@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-11T10:45:39Z",
+  "generated_at": "2026-05-11T10:54:12Z",
   "all_time": {
     "tag": "all",
     "label": "All-time",
@@ -201,10 +201,6 @@
       {
         "date": "2026-05-10",
         "file": "snapshots/2026/2026-05-10.csv"
-      },
-      {
-        "date": "2026-05-11",
-        "file": "snapshots/2026/2026-05-11.csv"
       }
     ]
   },

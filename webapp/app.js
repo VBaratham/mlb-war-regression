@@ -451,18 +451,23 @@ function renderChart() {
   if (!dates.length) return;
 
   // Build an index of player_id -> per-date total_war
+  // Strip the year from displayed tick labels (all from one season) to
+  // free up vertical space below the chart so the legend doesn't sit on
+  // top of the axis. Keep the full ISO date in hover.
+  const xLabels = dates.map(d => d.length === 10 ? d.slice(5) : d);
   const traces = top.map(p => {
     const y = dates.map(d => {
       const row = state.snapshots[d].find(r => r.player_id === p.player_id);
       return row ? Number(row.total_war) : null;
     });
     return {
-      x: dates,
+      x: xLabels,
       y,
       mode: dates.length > 1 ? "lines+markers" : "markers",
       type: "scatter",
       name: p.name || p.player_id,
-      hovertemplate: "<b>%{fullData.name}</b><br>%{x}: %{y:.2f} WAR<extra></extra>",
+      customdata: dates,
+      hovertemplate: "<b>%{fullData.name}</b><br>%{customdata}: %{y:.2f} WAR<extra></extra>",
     };
   });
 
@@ -471,13 +476,13 @@ function renderChart() {
   const bg = css.getPropertyValue("--bg").trim() || "#ffffff";
   const gridc = css.getPropertyValue("--border").trim() || "#d8d8d8";
   Plotly.react("chart", traces, {
-    margin: { t: 20, l: 50, r: 20, b: 50 },
+    margin: { t: 20, l: 50, r: 20, b: 100 },
     paper_bgcolor: bg,
     plot_bgcolor: bg,
     font: { color: fg },
-    xaxis: { title: "date", type: "category", gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
+    xaxis: { title: "", type: "category", gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
     yaxis: { title: "cumulative WAR", gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
-    legend: { orientation: "h", y: -0.2 },
+    legend: { orientation: "h", y: -0.35 },
     hovermode: "closest",
   }, { responsive: true, displaylogo: false });
 
