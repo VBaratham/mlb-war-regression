@@ -107,16 +107,35 @@ def write_manifest():
     manifest = {
         "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0, tzinfo=None).isoformat() + "Z",
         "all_time": None,
+        "all_time_single_fit": None,
         "current_season": None,
         "season_index": None,
     }
     if found["all_time"]:
         t = found["all_time"]
-        manifest["all_time"] = {
-            "tag": t,
-            "label": _label_for(t),
-            "leaderboard": f"coefficients_{t}_enriched.csv",
-        }
+        # Default career view: per-season-summed WAR. Robust to the cross-era
+        # identifiability issues of the single all-time fit.
+        career_sum_path = EVENTS / f"career_seasons_sum_{t}.csv"
+        if career_sum_path.exists():
+            manifest["all_time"] = {
+                "tag": t,
+                "label": _label_for(t),
+                "leaderboard": f"career_seasons_sum_{t}.csv",
+                "kind": "seasons_sum",
+            }
+            manifest["all_time_single_fit"] = {
+                "tag": t,
+                "label": f"{_label_for(t)} (single-fit)",
+                "leaderboard": f"coefficients_{t}_enriched.csv",
+                "kind": "single_fit",
+            }
+        else:
+            manifest["all_time"] = {
+                "tag": t,
+                "label": _label_for(t),
+                "leaderboard": f"coefficients_{t}_enriched.csv",
+                "kind": "single_fit",
+            }
         seasons = _list_seasons(t)
         if seasons:
             manifest["season_index"] = {

@@ -10,11 +10,17 @@ This is **regularized adjusted plus-minus** (RAPM, well-known from basketball) a
 
 ## Data
 
-- **Source:** Retrosheet event files (`https://www.retrosheet.org/events/`).
-- **Coverage:** 1910–2025 (116 seasons). Earlier years not available from Retrosheet.
-- **Parser:** `chadwick`'s `cwevent` C tool, run per-year directory.
-- **Scale:** 15.6M individual play events, aggregated to **3,536,955 half-innings**, with **15,438 unique batters**, **9,599 pitchers**, and **9,259 fielders** appearing across the dataset.
-- **Active vs retired:** the latest fully-covered season is 2025; the dataset captures partial information for active 2025 players' careers.
+Two sources are unified behind a single normalized event schema in `loaders/`:
+
+- **Retrosheet** (`https://www.retrosheet.org/events/`) — 1910–2025 (116 seasons), parsed via `cwevent`. `download_all.sh` walks forward to the current year and fetches any newly-published zips.
+- **MLB Stats API** (`statsapi.mlb.com`) — used for any year that hasn't shipped through Retrosheet yet (currently just the in-progress 2026 season). Per-game `feed/live` responses are cached locally.
+
+Player IDs are unified via the **Chadwick Bureau register** (`MLBAM ↔ Retrosheet` crosswalk, cached locally). MLBAM-only players (current rookies without retro entries yet) get synthetic IDs `x{mlbam:06d}` so they're still stable in the regression.
+
+`build_dataset.py --years 1910-2026 --tag all` auto-routes per year: retro if local files exist, statsapi otherwise. It also HEADs retrosheet.org for any missing year so the moment a season gets a retro release, the next build silently switches that year from statsapi to retro and drops the corresponding feed cache.
+
+- **Scale (1910-2025 retro fit):** 15.6M individual play events, aggregated to **3,536,955 half-innings**, with **15,438 unique batters**, **9,599 pitchers**, and **9,259 fielders**.
+- **Active vs retired:** the in-progress 2026 season is captured in real time via statsapi.
 
 ## Unit of analysis: the half-inning
 
@@ -136,8 +142,11 @@ Effect on player rankings: Coors-era hitters get appropriately deflated. Todd He
 ## Sign convention and centering
 
 After fitting, I:
+
 1. **Sign-flip pitcher and fielder coefficients** (a smaller raw coefficient = fewer runs allowed = better defense). After this, "higher = better" for all three roles.
-2. **Re-center each role's coefficients to zero mean.** Without this, the intercept absorbs the constant ~4 batters + 9 fielders per row, and individual coefficients carry that constant (e.g. raw mean offense coef = 0.02). Subtracting the role mean re-anchors "0 = average MLB player" without changing predictions; the constant flows into the intercept, which we don't report.
+2. **Re-center each role's coefficients to its innings-weighted mean.** Without re-centering, the intercept absorbs the constant ~4 batters + 9 fielders per row, and individual coefficients carry that constant (raw mean pitcher coef ≈ 0.12 runs/inning). The centering re-anchors "0 = average regular at this role" without changing predictions; the constant flows into the intercept, which we don't report.
+
+   The reason centering uses an **innings-weighted** mean rather than a simple mean (an earlier version of this code) is structural: ridge shrinks low-data players hard toward the prior. With 9,599 pitchers, ~7,000 of them are cup-of-coffee guys whose coefs land near the prior. A simple mean is dominated by them, sits below the regular pitcher baseline, and systematically displays *every regular pitcher* as worse than average (Nolan Ryan came out at -47 WAR under the old centering). Innings-weighting puts the zero line where the league-baseline regular actually lives. Mathematically: the league-aggregate RAA in each role sums to exactly zero by construction.
 
 ## From coefficients to "WAR"
 
@@ -151,6 +160,22 @@ total_WAR = total_RAA / 10        # standard ~10 runs per win conversion
 ```
 
 **Important:** this "WAR" is **runs above *average*** divided by 10, not wins above *replacement*. A typical regular MLB player = 0 in this system, but ≈ 2 WAR/year in Fangraphs. As a result our top players' totals are systematically ~1.5–2× larger than their Fangraphs WAR. The *ranking* is what's meaningful.
+
+## Per-season fits as the headline career number
+
+The all-time single fit has a known cross-era issue with pitchers: HOFers like Gaylord Perry and Nolan Ryan came out near zero or negative in the joint fit despite obvious greatness. The diagnosis is twofold:
+
+1. **Half-inning credit-sharing.** A starter pulled mid-inning gets credit for every event in that half-inning, including the reliever's contribution to the same half-inning. Modern bullpen usage produces more of these mixed-pitcher rows than the deadball era did, biasing modern pitcher coefs.
+
+2. **Season FE / pitcher coef confounding.** Season FE is one number per year and ridge prefers to put era variation there (it's essentially unregularized). But to do so cleanly the model needs within-year variation across pitchers, which depends on how identifiable each pitcher is from his contemporaries — and that varies by era (roster stability, player movement, sample size).
+
+Both confounds are structural to the half-inning unit + single all-time fit.
+
+**The fix the project ships as the headline:** one ridge fit *per season*, then sum each player's per-season WAR across the seasons they played. Each per-season fit is a self-contained problem: it picks its own α by matching off_sd ≈ 0.03, centers innings-weighted within that season, and writes one row per (season, player) to `season_war_<tag>.csv`. The career roll-up sums each player's WAR across seasons → `career_seasons_sum_<tag>.csv` (the file the webapp's "All-time" view loads).
+
+Trade-off: a per-season fit is era-relative by construction (each season's mean = 0). Cross-era comparisons via summed WAR inherit the standard "replacement level drifts" caveat that mainstream WAR (fWAR, bWAR) lives with. We accept this as the *less wrong* assumption versus the all-time fit's structural issues.
+
+The all-time single-fit version is preserved as a separate webapp view ("All-time (single-fit)") with a caveat banner; the numbers and methodology above continue to describe how it's computed.
 
 ## Three derived views
 
@@ -166,44 +191,44 @@ The cumulative `total_war` favors long careers. To answer different questions:
 
 # Results
 
-## Top 15 all-time by total_war (career runs above average / 10, park-adjusted)
+## Top 15 all-time (career = sum of per-season WAR)
 
-| # | Player | total | off | pit | fld |
-|--|--|--|--|--|--|
-| 1 | Willie Mays | 264.9 | 193.0 | — | 71.8 |
-| 2 | Barry Bonds | 243.4 | 222.5 | — | 20.9 |
-| 3 | Albert Pujols | 231.7 | 230.4 | 0.0 | 1.2 |
-| 4 | Hank Aaron | 231.5 | 216.5 | — | 15.0 |
-| 5 | Cal Ripken | 231.2 | 222.5 | — | 8.7 |
-| 6 | Eddie Murray | 220.2 | 221.5 | — | -1.3 |
-| 7 | Stan Musial | 219.2 | 178.9 | 0.0 | 40.3 |
-| 8 | Dave Winfield | 216.4 | 205.2 | — | 11.2 |
-| 9 | Pete Rose | 214.0 | 212.3 | — | 1.7 |
-| 10 | Mel Ott | 213.9 | 199.5 | — | 14.3 |
-| 11 | Adrian Beltré | 211.6 | 197.5 | — | 14.1 |
-| 12 | Rickey Henderson | 207.7 | 212.8 | — | -5.1 |
-| 13 | Carl Yastrzemski | 207.0 | 212.5 | — | -5.4 |
-| 14 | Frank Robinson | 204.2 | 188.4 | — | 15.8 |
-| 15 | Babe Ruth | 200.6 | 186.3 | 5.9 | 8.4 |
+| # | Player | total | off | pit | fld | seasons |
+|--|--|--|--|--|--|--|
+| 1 | Willie Mays | 63.8 | 39.7 | — | 24.2 | 22 |
+| 2 | Walter Johnson | 59.0 | -8.2 | 67.2 | — | 18 |
+| 3 | Roger Clemens | 54.8 | -0.7 | 55.6 | — | 24 |
+| 4 | Tom Seaver | 52.4 | -8.3 | 60.8 | — | 20 |
+| 5 | Eddie Murray | 51.7 | 47.7 | — | 4.0 | 21 |
+| 6 | Cal Ripken | 49.2 | 41.8 | — | 7.4 | 21 |
+| 7 | Brooks Robinson | 49.2 | 44.3 | — | 4.9 | 23 |
+| 8 | Frank Robinson | 49.0 | 43.1 | — | 5.9 | 21 |
+| 9 | Hank Aaron | 48.3 | 48.6 | — | -0.3 | 23 |
+| 10 | Dave Winfield | 47.8 | 46.0 | — | 1.8 | 22 |
+| 11 | Lou Gehrig | 47.4 | 41.5 | — | 5.9 | 17 |
+| 12 | Pete Alexander | 45.9 | -7.1 | 52.9 | — | 20 |
+| 13 | Gil Hodges | 44.2 | 36.3 | — | 7.9 | 18 |
+| 14 | Babe Ruth | 43.2 | 30.0 | 9.5 | 3.7 | 22 |
+| 15 | Lefty Grove | 42.3 | -4.4 | 46.7 | — | 17 |
 
-Mays at #1 reflects his combination of elite offense plus an enormous defensive contribution (71.8 fielding RAA) accumulated over 22 seasons in CF.
+Top 4 mixes Mays at #1 with three of the greatest pitchers in history at #2-#4. Mays's spread of elite offense + 22 seasons of CF defense is what gets him over the top.
 
-## Top 10 pitchers (career)
+## Top 10 pitchers (career = sum of per-season pit_war, min 1500 pit_innings)
 
-| # | Pitcher | pit_war | runs/inning |
+| # | Pitcher | pit_innings | pit_war |
 |--|--|--|--|
-| 1 | Walter Johnson | 49.3 | 0.094 |
-| 2 | Justin Verlander | 34.8 | 0.096 |
-| 3 | Clayton Kershaw | 34.3 | 0.117 |
-| 4 | Max Scherzer | 28.8 | 0.095 |
-| 5 | Chris Sale | 26.2 | 0.121 |
-| 6 | Zack Greinke | 26.0 | 0.074 |
-| 7 | Jacob deGrom | 25.4 | 0.162 |
-| 8 | Roger Clemens | 22.1 | 0.044 |
-| 9 | Zack Wheeler | 21.7 | 0.122 |
-| 10 | Pedro Martínez | 21.5 | 0.074 |
+| 1 | Walter Johnson | 5262 | 67.2 |
+| 2 | Tom Seaver | 4899 | 60.8 |
+| 3 | Roger Clemens | 5056 | 55.6 |
+| 4 | Pete Alexander | 5104 | 52.9 |
+| 5 | Lefty Grove | 3939 | 46.7 |
+| 6 | Greg Maddux | 5122 | 44.6 |
+| 7 | Steve Carlton | 5354 | 42.8 |
+| 8 | Don Sutton | 5441 | 42.7 |
+| 9 | Randy Johnson | 4245 | 41.8 |
+| 10 | Warren Spahn | 5208 | 39.6 |
 
-Walter Johnson's #1 ranking is consistent with his common designation as the greatest pitcher of all time. The list mixes recent active aces (Verlander, Kershaw, Scherzer, deGrom, Wheeler) with all-time greats.
+Walter Johnson #1 matches conventional wisdom. The per-season-sum methodology gives HOF pitchers like Spahn (#10), Maddux (#6), and others who were broken under the single-fit version a sensible positive WAR.
 
 ## Top 10 fielders (career)
 
@@ -291,9 +316,11 @@ This list is more about *peak* offensive talent. Helton at #3 reflects a real Co
 
 6. **Rate stats favor early-career or short-career players.** Peak full-season rate doesn't penalize decline phases, so a player who retires early at peak (Koufax, Mantle) looks better in rate terms than one who hangs on for 5 mediocre years.
 
-7. **Single position per player.** Retrosheet rosters carry one position; we use the most recent listing. Players who shifted positions (Ripken SS→3B, A-Rod SS→3B, Yount SS→OF) get one bucket. This affects the within-position normalization but not the cumulative numbers.
+7. **Single position per player.** Retrosheet rosters carry one position per (player, year). We pick each player's **modal** position across their career, which guards against single-year data errors. (Notable example: Retrosheet's 2005 CLE roster file lists Juan Gonzalez — a career OF — as `P`. Picking last-year would faithfully reproduce the typo; picking the mode does the right thing.)
 
-8. **The pitcher era effect.** Modern pitchers have higher per-inning rates than dead-ball-era pitchers, partly because of velocity / pitch design and partly because batters strike out more. The within-position z-score for pitchers is dominated by recent / active pitchers as a result. Within-decade z-scores would address this.
+8. **Cross-era comparisons via summed WAR are era-relative.** Each per-season fit centers on its own innings-weighted mean, so "0 WAR in 1965" and "0 WAR in 2020" are anchored against potentially different absolute skill levels. This is the same caveat that applies to Fangraphs/B-Ref career WAR — every season is normalized to its own replacement/league baseline, and summing across years assumes those baselines represent comparable absolute talent. The all-time single-fit view *tries* to be cross-era (one global baseline) but fails technically because of the structural issues described in §Per-season fits. There's no fully objective cross-era WAR; we ship the per-season-sum convention because it's what mainstream baseball stats use and because it doesn't produce nonsense numbers.
+
+9. **The pitcher era effect.** Modern pitchers have higher per-inning rates than dead-ball-era pitchers, partly because of velocity / pitch design and partly because batters strike out more. The within-position z-score for pitchers is dominated by recent / active pitchers as a result. Within-decade z-scores would address this.
 
 ---
 
@@ -301,10 +328,19 @@ This list is more about *peak* offensive talent. Helton at #3 reflects a real Co
 
 | File | Purpose |
 |---|---|
-| `download_all.sh` | Fetch all `<YYYY>eve.zip` from retrosheet.org into `data/raw/<YYYY>/`. |
-| `build_half_innings.py` | Run `cwevent` on all year directories; aggregate to half-inning rows. Output: `data/events/half_innings_all.parquet` (3.54M rows). |
-| `build_game_meta.py` | Scan event-file metadata for `info,site` lines; build game_id → park lookup. Output: `data/events/game_park.csv`. |
-| `fit_ridge_all.py` | Build sparse design matrix with player + season + park fixed effects; ridge regression with per-role column scaling; output coefficients per player and a park-effects table. Output: `data/events/coefficients_all.{parquet,csv}` and `data/events/park_effects.csv`. |
-| `make_views.py` | Post-process coefficients into per-season, per-full-season-rate, and per-position-z-score derived metrics. Output: `data/events/coefficients_all_enriched.{parquet,csv}`. |
+| `download_all.sh` | Walk 1910→current year, fetch any Retrosheet zips not yet on disk; clear stale statsapi feed caches for newly-arrived years. |
+| `loaders/common.py` | Source-agnostic per-event → half-inning aggregation. |
+| `loaders/retro.py` | Retrosheet driver: `cwevent` + park + roster extraction + on-the-fly fetch of newly-published years. |
+| `loaders/statsapi.py` | MLB Stats API driver: schedule + per-game `feed/live` parsing, with on-disk caching. |
+| `loaders/crosswalk.py` | MLBAM ↔ Retrosheet player-ID crosswalk via the Chadwick Bureau register. |
+| `build_dataset.py` | Top-level builder; auto-routes years to retro or statsapi. Output: `data/events/half_innings_<tag>.parquet`, `game_park_<tag>.csv`, `rosters_<tag>.csv`. |
+| `fit_ridge_all.py` | Single all-time ridge fit (player + season FE + park FE + home). Output: `coefficients_<tag>.{parquet,csv}` and `park_effects_<tag>.csv`. |
+| `fit_per_season.py` | One ridge fit per season; emits long-format `season_war_<tag>.csv` + the headline `career_seasons_sum_<tag>.csv`. Supports `--seasons` for incremental cron updates and `--extra-tags` to union the current statsapi year into the all-time table. |
+| `make_views.py` | Post-process the single-fit coefficients into per-season, peak-rate, and per-position-z-score derived metrics. Output: `coefficients_<tag>_enriched.{parquet,csv}`. |
+| `snapshot.py` | Write a dated slim coefficient snapshot for the current season; regenerate `manifest.json` (the webapp's index). |
+| `refresh.sh` | Cron entry point. Pulls, rebuilds current-season half-innings, refits, snapshots, pushes. |
+| `webapp/` | Static frontend (index.html + style.css + app.js) — reads `data/events/*.csv` via relative paths. |
 
-Total runtime end-to-end on a Mac: ~10 min download + ~3 min parse + ~2 min regression + ~10 sec views.
+Total runtime end-to-end on a Mac:
+- Cold rebuild: ~10 min download + ~5 min parse + ~2 min single-fit + ~3 min per-season fits.
+- Daily incremental (cron): ~30 sec for current-season refit + ~2 sec for one season's incremental per-season update.

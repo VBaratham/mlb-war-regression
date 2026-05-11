@@ -70,6 +70,12 @@ function populateViewSelector() {
   if (state.manifest.all_time) {
     sel.append(new Option(state.manifest.all_time.label, "all_time"));
   }
+  if (state.manifest.all_time_single_fit) {
+    sel.append(new Option(
+      state.manifest.all_time_single_fit.label,
+      "all_time_single_fit"
+    ));
+  }
   if (state.manifest.season_index) {
     const seasons = [...state.manifest.season_index.seasons].sort((a, b) => b - a);
     const cs = state.manifest.current_season;
@@ -99,11 +105,28 @@ async function ensureSeasonWarLoaded() {
 }
 
 async function switchView(viewKey) {
-  if (viewKey === "all_time") {
-    state.view = "all_time";
+  const banner = document.getElementById("caveat-banner");
+  banner.hidden = true;
+  banner.innerHTML = "";
+
+  if (viewKey === "all_time" || viewKey === "all_time_single_fit") {
+    state.view = viewKey;
     state.seasonYear = null;
-    state.data = await loadCSV(state.manifest.all_time.leaderboard);
+    const node = state.manifest[viewKey];
+    state.data = await loadCSV(node.leaderboard);
     state.snapshots = null;
+    if (viewKey === "all_time_single_fit") {
+      banner.innerHTML =
+        "<strong>Caveat:</strong> this view comes from a single all-time " +
+        "ridge fit. It has known cross-era bias for pitchers (some HOFers " +
+        "like Gaylord Perry and Nolan Ryan come out near zero or negative) " +
+        "because half-inning credit-sharing and season/pitcher confounds " +
+        "make individual pitcher coefficients hard to identify across eras. " +
+        "The default <em>All-time</em> view sums each player's per-season " +
+        "WAR (same convention as Fangraphs/B-Ref career WAR) and avoids " +
+        "this issue.";
+      banner.hidden = false;
+    }
   } else if (viewKey.startsWith("season:")) {
     state.view = "season";
     state.seasonYear = parseInt(viewKey.split(":")[1]);
@@ -136,7 +159,8 @@ async function switchView(viewKey) {
   // Sensible default min-innings: all-time wants a higher floor so the table
   // isn't dominated by 19th-century cup-of-coffee guys; single seasons need
   // a much lower floor since players accumulate few innings.
-  const target = state.view === "all_time" ? 1500 : 100;
+  const isAllTime = state.view === "all_time" || state.view === "all_time_single_fit";
+  const target = isAllTime ? 1500 : 100;
   state.filters.minInn = target;
   document.getElementById("min-inn").value = target;
 
@@ -380,8 +404,10 @@ function renderTable() {
 
   let title;
   if (state.view === "all_time") title = state.manifest.all_time.label;
+  else if (state.view === "all_time_single_fit")
+    title = state.manifest.all_time_single_fit.label;
   else if (state.view === "season") title = `${state.seasonYear} season`;
-  else title = state.manifest.current_season.label;
+  else title = "";
   document.getElementById("table-title").textContent =
     `${title} — ${rows.length.toLocaleString()} qualifiers ` +
     `(showing ${shown.toLocaleString()})`;

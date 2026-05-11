@@ -1,9 +1,16 @@
 {
-  "generated_at": "2026-05-11T10:28:06Z",
+  "generated_at": "2026-05-11T10:39:01Z",
   "all_time": {
     "tag": "all",
     "label": "All-time",
-    "leaderboard": "coefficients_all_enriched.csv"
+    "leaderboard": "career_seasons_sum_all.csv",
+    "kind": "seasons_sum"
+  },
+  "all_time_single_fit": {
+    "tag": "all",
+    "label": "All-time (single-fit)",
+    "leaderboard": "coefficients_all_enriched.csv",
+    "kind": "single_fit"
   },
   "current_season": {
     "tag": "2026",

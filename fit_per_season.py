@@ -297,22 +297,68 @@ def main():
         # gitignored away (fresh clone) but the CSV is checked in.
         existing = (pd.read_parquet(out_parquet) if out_parquet.exists()
                     else pd.read_csv(out_csv, low_memory=False))
+        # Drop metadata columns from existing rows so the re-merge below
+        # doesn't produce _x/_y duplicates.
+        for c in ("name", "pos", "team"):
+            if c in existing.columns:
+                existing = existing.drop(columns=c)
         keep = existing[~existing["season"].isin(seasons_to_fit)]
         merged = pd.concat([keep, new], ignore_index=True).sort_values(["season", "player_id"])
     else:
         merged = new.sort_values(["season", "player_id"])
 
-    # Attach name + most-recent pos/team from the all-time roster table for
-    # convenience -- the per-season fit doesn't carry this naturally.
-    coefs_path = EVENTS / f"coefficients_{TAG}_enriched.parquet"
-    if coefs_path.exists():
-        roster = pd.read_parquet(coefs_path)[["player_id", "name", "pos", "team"]]
+    # Attach name + pos + team. Union ALL coefficients_*_enriched.parquet files
+    # so we pick up retro player metadata from the all-time fit *and* current-
+    # season statsapi metadata (which lives in coefficients_<current>_enriched
+    # and isn't in the all-time table because half_innings_all is retro-only).
+    metas = []
+    for f in sorted(EVENTS.glob("coefficients_*_enriched.parquet")):
+        try:
+            df = pd.read_parquet(f, columns=["player_id", "name", "pos", "team"])
+            metas.append(df)
+        except Exception as e:
+            print(f"  skipping {f.name}: {e}")
+    if metas:
+        roster = pd.concat(metas, ignore_index=True).drop_duplicates("player_id", keep="first")
         merged = merged.merge(roster, on="player_id", how="left")
 
     merged.to_parquet(out_parquet, index=False)
     merged.to_csv(out_csv, index=False)
     print(f"\nwrote {out_parquet} ({len(merged):,} rows)")
     print(f"wrote {out_csv}")
+
+    # Career roll-up: per-season-summed WAR is the headline cross-era number
+    # the webapp displays (more robust than the single all-time fit, which
+    # has cross-era identifiability issues for pitchers). One row per player.
+    print("\nrolling up career season-sums...")
+    sums = (merged.groupby("player_id", as_index=False)
+                  .agg(off_war=("off_war", "sum"),
+                       pit_war=("pit_war", "sum"),
+                       fld_war=("fld_war", "sum"),
+                       total_war=("total_war", "sum"),
+                       off_innings=("off_innings", "sum"),
+                       pit_innings=("pit_innings", "sum"),
+                       fld_innings=("fld_innings", "sum"),
+                       seasons_played=("season", "nunique"),
+                       first_year=("season", "min"),
+                       last_year_played=("season", "max")))
+    # Bring along name / pos / team / teams from the existing enriched all-time
+    # coefficients file (single source of truth for player metadata).
+    coefs_path = EVENTS / f"coefficients_{TAG}_enriched.parquet"
+    if coefs_path.exists():
+        meta = pd.read_parquet(coefs_path)[
+            ["player_id", "name", "pos", "team", "teams"]
+        ]
+        sums = sums.merge(meta, on="player_id", how="left")
+
+    career_path = EVENTS / f"career_seasons_sum_{TAG}.csv"
+    cols = ["player_id", "name", "pos", "team", "teams",
+            "off_innings", "pit_innings", "fld_innings",
+            "off_war", "pit_war", "fld_war", "total_war",
+            "seasons_played", "first_year", "last_year_played"]
+    sums = sums[[c for c in cols if c in sums.columns]]
+    sums.sort_values("total_war", ascending=False).to_csv(career_path, index=False)
+    print(f"wrote {career_path} ({len(sums):,} players)")
 
 
 if __name__ == "__main__":
