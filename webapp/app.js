@@ -323,13 +323,33 @@ async function openPlayerDetail(playerId) {
   const bg = css.getPropertyValue("--bg").trim() || "#ffffff";
   const accent = css.getPropertyValue("--accent").trim() || "#1f4a80";
   const gridc = css.getPropertyValue("--border").trim() || "#d8d8d8";
+
+  // Align the y=0 baseline on both axes. Without explicit ranges, Plotly
+  // auto-fits each axis independently, so cumulative WAR (typically all
+  // positive) gets zero at the bottom while season WAR (mixed signs) puts
+  // zero a third of the way up. Compute matching fractions-below-zero.
+  const seasonVals = rows.map(r => Number(r.total_war) || 0);
+  const PAD = 1.05;
+  const sMin = Math.min(0, ...seasonVals) * PAD;
+  const sMax = Math.max(0, ...seasonVals) * PAD;
+  const cMin = Math.min(0, ...cumWar) * PAD;
+  const cMax = Math.max(0, ...cumWar) * PAD;
+  const sSpan = sMax - sMin || 1;
+  const cSpan = cMax - cMin || 1;
+  // Fraction of each axis dedicated to negative space; align on the larger.
+  const fS = -sMin / sSpan;
+  const fC = -cMin / cSpan;
+  const f = Math.max(fS, fC);
+  const yRange  = sMax > 0 ? [-f / (1 - f) * sMax, sMax] : [sMin, 0];
+  const y2Range = cMax > 0 ? [-f / (1 - f) * cMax, cMax] : [cMin, 0];
+
   Plotly.react("player-chart", [
     {
       x: rows.map(r => String(r.season)),
-      y: rows.map(r => Number(r.total_war)),
+      y: seasonVals,
       type: "bar",
       name: "Season WAR",
-      marker: { color: rows.map(r => (Number(r.total_war) >= 0 ? accent : "#c44")) },
+      marker: { color: seasonVals.map(v => v >= 0 ? accent : "#c44") },
       hovertemplate: "%{x}: %{y:.2f} WAR<extra></extra>",
     },
     {
@@ -343,14 +363,14 @@ async function openPlayerDetail(playerId) {
       hovertemplate: "%{x}: %{y:.1f} cumulative WAR<extra></extra>",
     },
   ], {
-    margin: { t: 20, l: 50, r: 50, b: 40 },
+    margin: { t: 20, l: 50, r: 50, b: 60 },
     paper_bgcolor: bg,
     plot_bgcolor: bg,
     font: { color: fg },
-    xaxis: { title: "season", type: "category", gridcolor: gridc, linecolor: gridc },
-    yaxis: { title: "season WAR", gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
-    yaxis2: { title: "cumulative WAR", overlaying: "y", side: "right", showgrid: false, linecolor: gridc },
-    legend: { orientation: "h", y: -0.2 },
+    xaxis: { title: "", type: "category", gridcolor: gridc, linecolor: gridc },
+    yaxis: { title: "season WAR", range: yRange, gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
+    yaxis2: { title: "cumulative WAR", range: y2Range, overlaying: "y", side: "right", showgrid: false, linecolor: gridc },
+    legend: { orientation: "h", y: -0.25 },
     barmode: "relative",
   }, { responsive: true, displaylogo: false });
 }
