@@ -161,6 +161,8 @@ async function switchView(viewKey) {
     && Object.keys(state.snapshots).length >= 1;
   document.getElementById("chart-section").hidden = !chartVisible;
 
+  document.body.dataset.view = state.view;
+
   // Sensible default min-innings: all-time wants a higher floor so the table
   // isn't dominated by 19th-century cup-of-coffee guys; single seasons need
   // a much lower floor since players accumulate few innings.
@@ -416,8 +418,8 @@ function renderTable() {
       <td class="${rankCls("pit_war")}">${fmt(r.pit_war)}</td>
       <td class="${rankCls("fld_war")}">${fmt(r.fld_war)}</td>
       <td class="num">${totalInnings(r).toLocaleString()}</td>
-      <td class="num">${r.first_year || ""}</td>
-      <td class="num">${r.last_year_played || r.last_year || ""}</td>
+      <td class="num years-col">${r.first_year || ""}</td>
+      <td class="num years-col">${r.last_year_played || r.last_year || ""}</td>
     </tr>`).join("");
 
   let title;
