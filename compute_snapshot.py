@@ -60,9 +60,14 @@ def _player_meta(tag: str) -> pd.DataFrame:
     metas = []
     for f in sorted(EVENTS.glob("coefficients_*_enriched.parquet")):
         try:
-            metas.append(pd.read_parquet(f, columns=["player_id", "name", "pos"]))
+            metas.append(pd.read_parquet(
+                f, columns=["player_id", "name", "pos", "team", "teams"]))
         except Exception:
-            pass
+            try:
+                metas.append(pd.read_parquet(
+                    f, columns=["player_id", "name", "pos", "team"]))
+            except Exception:
+                pass
     if not metas:
         return pd.DataFrame(columns=["player_id", "name", "pos"])
     return (pd.concat(metas, ignore_index=True)

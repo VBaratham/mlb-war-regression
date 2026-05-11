@@ -312,9 +312,15 @@ def main():
     # season statsapi metadata (which lives in coefficients_<current>_enriched
     # and isn't in the all-time table because half_innings_all is retro-only).
     metas = []
+    meta_cols = ["player_id", "name", "pos", "team", "teams"]
     for f in sorted(EVENTS.glob("coefficients_*_enriched.parquet")):
         try:
-            df = pd.read_parquet(f, columns=["player_id", "name", "pos", "team"])
+            # Some older enriched files don't have "teams"; fall back to a
+            # smaller column set if it's missing.
+            try:
+                df = pd.read_parquet(f, columns=meta_cols)
+            except Exception:
+                df = pd.read_parquet(f, columns=meta_cols[:-1])
             metas.append(df)
         except Exception as e:
             print(f"  skipping {f.name}: {e}")
