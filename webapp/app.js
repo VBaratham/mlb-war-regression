@@ -43,6 +43,7 @@ const state = {
   data: null,          // current leaderboard rows (the table)
   snapshots: null,     // { 'YYYY-MM-DD': rows[] } once loaded
   seasonWar: null,     // long-format season_war rows once loaded (lazy)
+  careerByPlayer: null,  // player_id -> career_seasons_sum row (lazy cache)
   seasonYear: null,    // active year for the single-season view
   filters: { search: "", positions: new Set(), minInn: 500 },
   sort: { key: "total_war", dir: "desc" },
@@ -110,6 +111,13 @@ async function ensureSeasonWarLoaded() {
   if (state.seasonWar) return;
   if (!state.manifest.season_index) return;
   state.seasonWar = await loadCSV(state.manifest.season_index.file);
+}
+
+async function ensureCareerLoaded() {
+  if (state.careerByPlayer) return;
+  if (!state.manifest.all_time) return;
+  const rows = await loadCSV(state.manifest.all_time.leaderboard);
+  state.careerByPlayer = new Map(rows.map(r => [r.player_id, r]));
 }
 
 async function switchView(viewKey) {
@@ -285,7 +293,14 @@ async function openPlayerDetail(playerId) {
     .filter(r => r.player_id === playerId)
     .sort((a, b) => Number(a.season) - Number(b.season));
   if (!rows.length) return;
-  const career = state.data.find(r => r.player_id === playerId) || rows[rows.length - 1];
+  // Modal header uses CAREER-level metadata (modal team, full chronological
+  // teams list, total seasons). Look it up in career_seasons_sum regardless
+  // of which view triggered the modal -- the row from state.data is per-
+  // season in season views.
+  await ensureCareerLoaded();
+  const career = (state.careerByPlayer && state.careerByPlayer.get(playerId))
+    || state.data.find(r => r.player_id === playerId)
+    || rows[rows.length - 1];
 
   const modal = document.getElementById("player-modal");
   modal.hidden = false;
@@ -296,11 +311,15 @@ async function openPlayerDetail(playerId) {
   const teamsOrdered = modalTeam && teamsChrono.includes(modalTeam)
     ? [modalTeam, ...teamsChrono.filter(t => t !== modalTeam)]
     : teamsChrono;
-  const teamLabel = teamsOrdered.length
-    ? teamsOrdered.map(t => t === modalTeam
-        ? `<strong>${escapeHtml(displayTeam(t))}</strong>`
-        : escapeHtml(displayTeam(t))).join(", ")
-    : "";
+  const modalDisplay = displayTeam(modalTeam);
+  const seen = new Set();
+  const teamLabel = teamsOrdered.map(displayTeam).filter(d => {
+    if (seen.has(d)) return false;
+    seen.add(d);
+    return true;
+  }).map(d => d === modalDisplay
+    ? `<strong>${escapeHtml(d)}</strong>`
+    : escapeHtml(d)).join(", ");
   document.getElementById("player-modal-sub").innerHTML =
     `${escapeHtml(career.pos || "")} &middot; ${teamLabel} &middot; ` +
     `${rows.length} season${rows.length > 1 ? "s" : ""} ` +
@@ -313,8 +332,13 @@ async function openPlayerDetail(playerId) {
     cumulative += Number(r.total_war) || 0;
     cumYears.push(String(r.season));
     cumWar.push(cumulative);
+    // Per-season team(s). r.teams is pipe-joined; multi-team rows mean a
+    // mid-season trade. Translate retro codes to common abbrevs.
+    const seasonTeams = String(r.teams || r.team || "")
+      .split("|").filter(Boolean).map(displayTeam).join(", ");
     return `<tr>
       <td class="num">${r.season}</td>
+      <td>${escapeHtml(seasonTeams)}</td>
       <td class="num">${fmt(r.total_war)}</td>
       <td class="num">${fmt(r.off_war)}</td>
       <td class="num">${fmt(r.pit_war)}</td>
@@ -390,22 +414,29 @@ const TEAMS_VISIBLE = 2;
 
 function renderTeams(r) {
   const modal = r.team || "";
-  const chronological = (r.teams || modal || "").split("|").filter(Boolean);
-  if (!chronological.length) return "";
-  // Put the modal team first, then the rest in their original chronological
-  // order. Show the first few inline; tuck the rest behind a "+N" with the
-  // full list as a hover tooltip.
-  const ordered = modal && chronological.includes(modal)
-    ? [modal, ...chronological.filter(t => t !== modal)]
-    : chronological;
+  const chronologicalRaw = (r.teams || modal || "").split("|").filter(Boolean);
+  if (!chronologicalRaw.length) return "";
+  // Put the modal team first, then the rest in chronological order. Dedupe
+  // after translating retro codes -- a franchise with both retro (ANA) and
+  // statsapi (LAA) codings collapses to one display entry.
+  const orderedRaw = modal && chronologicalRaw.includes(modal)
+    ? [modal, ...chronologicalRaw.filter(t => t !== modal)]
+    : chronologicalRaw;
+  const seen = new Set();
+  const ordered = [];
+  for (const t of orderedRaw) {
+    const d = displayTeam(t);
+    if (!seen.has(d)) { seen.add(d); ordered.push({ raw: t, display: d }); }
+  }
   const visible = ordered.slice(0, TEAMS_VISIBLE);
   const hiddenCount = ordered.length - visible.length;
-  const inline = visible.map((t, i) => {
-    const html = escapeHtml(displayTeam(t));
-    return i === 0 && t === modal ? `<strong>${html}</strong>` : html;
+  const modalDisplay = displayTeam(modal);
+  const inline = visible.map(({ display }, i) => {
+    const html = escapeHtml(display);
+    return i === 0 && display === modalDisplay ? `<strong>${html}</strong>` : html;
   }).join(", ");
   const more = hiddenCount > 0 ? `, +${hiddenCount}` : "";
-  const fullList = ordered.map(displayTeam).join(", ");
+  const fullList = ordered.map(o => o.display).join(", ");
   return `<span class="teams" title="${escapeHtml(fullList)}">${inline}${more}</span>`;
 }
 

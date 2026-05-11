@@ -299,7 +299,7 @@ def main():
                     else pd.read_csv(out_csv, low_memory=False))
         # Drop metadata columns from existing rows so the re-merge below
         # doesn't produce _x/_y duplicates.
-        for c in ("name", "pos", "team"):
+        for c in ("name", "pos", "team", "teams"):
             if c in existing.columns:
                 existing = existing.drop(columns=c)
         keep = existing[~existing["season"].isin(seasons_to_fit)]
@@ -307,26 +307,55 @@ def main():
     else:
         merged = new.sort_values(["season", "player_id"])
 
-    # Attach name + pos + team. Union ALL coefficients_*_enriched.parquet files
-    # so we pick up retro player metadata from the all-time fit *and* current-
-    # season statsapi metadata (which lives in coefficients_<current>_enriched
-    # and isn't in the all-time table because half_innings_all is retro-only).
+    # Per-season teams: for each (player_id, season) row, look up which team(s)
+    # the player was on that year from the unioned roster files. Players who
+    # were traded mid-season get multiple roster rows; we keep all of them
+    # pipe-joined in `teams`, with the first listed (alphabetical) as `team`.
+    print("attaching per-season teams from rosters...")
+    roster_tags = [TAG] + (
+        [t.strip() for t in args.extra_tags.split(",")] if args.extra_tags else []
+    )
+    roster_frames = []
+    for t in roster_tags:
+        p = EVENTS / f"rosters_{t}.csv"
+        if p.exists():
+            roster_frames.append(pd.read_csv(p))
+    if roster_frames:
+        ros = pd.concat(roster_frames, ignore_index=True)
+        ros = ros.dropna(subset=["team"])
+        ros = ros[ros["team"].astype(str).str.len() > 0]
+        ros = ros.drop_duplicates(["player_id", "year", "team"])
+        per_year = (ros.groupby(["player_id", "year"], as_index=False)
+                      .agg(team=("team", "first"),
+                           teams=("team", lambda s: "|".join(s.tolist()))))
+        per_year = per_year.rename(columns={"year": "season"})
+        merged = merged.merge(per_year, on=["player_id", "season"], how="left")
+    else:
+        print("  no roster files found; team/teams will be empty per row")
+        merged["team"] = ""
+        merged["teams"] = ""
+
+    # Player name + pos (career-level metadata, doesn't vary by season). Pull
+    # from coefficients_<TAG>_enriched (the all-time fit) first so retro
+    # players win; fall back to other tags' enriched files for statsapi-only
+    # players (rookies not in retro).
+    print("attaching player names...")
+    primary = EVENTS / f"coefficients_{TAG}_enriched.parquet"
+    secondary = sorted(
+        f for f in EVENTS.glob("coefficients_*_enriched.parquet") if f != primary
+    )
     metas = []
-    meta_cols = ["player_id", "name", "pos", "team", "teams"]
-    for f in sorted(EVENTS.glob("coefficients_*_enriched.parquet")):
-        try:
-            # Some older enriched files don't have "teams"; fall back to a
-            # smaller column set if it's missing.
+    for f in [primary, *secondary]:
+        if f.exists():
             try:
-                df = pd.read_parquet(f, columns=meta_cols)
-            except Exception:
-                df = pd.read_parquet(f, columns=meta_cols[:-1])
-            metas.append(df)
-        except Exception as e:
-            print(f"  skipping {f.name}: {e}")
+                metas.append(pd.read_parquet(f, columns=["player_id", "name", "pos"]))
+            except Exception as e:
+                print(f"  skipping {f.name}: {e}")
     if metas:
-        roster = pd.concat(metas, ignore_index=True).drop_duplicates("player_id", keep="first")
-        merged = merged.merge(roster, on="player_id", how="left")
+        name_pos = pd.concat(metas, ignore_index=True).drop_duplicates(
+            "player_id", keep="first"
+        )
+        merged = merged.merge(name_pos, on="player_id", how="left")
 
     merged.to_parquet(out_parquet, index=False)
     merged.to_csv(out_csv, index=False)
@@ -349,16 +378,42 @@ def main():
                        first_year=("season", "min"),
                        last_year_played=("season", "max"),
                        peak_season_war=("total_war", "max")))
-    # "Best annual contribution" rate: career total / seasons played.
     sums["war_per_season"] = sums["total_war"] / sums["seasons_played"].clip(lower=1)
-    # Bring along name / pos / team / teams from the existing enriched all-time
-    # coefficients file (single source of truth for player metadata).
-    coefs_path = EVENTS / f"coefficients_{TAG}_enriched.parquet"
-    if coefs_path.exists():
-        meta = pd.read_parquet(coefs_path)[
-            ["player_id", "name", "pos", "team", "teams"]
-        ]
-        sums = sums.merge(meta, on="player_id", how="left")
+
+    # Career-modal team + chronological list, derived from the per-season teams
+    # we just joined in. Modal = team with the most seasons (ties broken by
+    # most-recent appearance). Chronological list = first appearance year per
+    # team. This fixes the prior alpha-sort-priority bug where a player's 2026
+    # statsapi team could clobber their actual career modal.
+    if "team" in merged.columns:
+        # Explode any pipe-joined per-season teams into one row per (player,
+        # season, team).
+        exploded = merged[["player_id", "season", "teams"]].copy()
+        exploded["team"] = exploded["teams"].fillna("").astype(str).str.split("|")
+        exploded = exploded.explode("team")
+        exploded = exploded[exploded["team"].astype(str).str.len() > 0]
+        seasons_per_team = (exploded.groupby(["player_id", "team"])
+                                    .agg(n=("season", "nunique"),
+                                         recency=("season", "max"))
+                                    .reset_index())
+        modal_team = (seasons_per_team
+                      .sort_values(["player_id", "n", "recency"],
+                                   ascending=[True, False, False])
+                      .drop_duplicates("player_id", keep="first")
+                      [["player_id", "team"]])
+        first_year_team = (exploded.groupby(["player_id", "team"])["season"].min()
+                                   .reset_index()
+                                   .sort_values(["player_id", "season"]))
+        teams_chrono = (first_year_team.groupby("player_id")["team"]
+                                       .apply(lambda s: "|".join(s.unique()))
+                                       .reset_index()
+                                       .rename(columns={"team": "teams"}))
+        sums = sums.merge(modal_team, on="player_id", how="left") \
+                   .merge(teams_chrono, on="player_id", how="left")
+
+    # Pull name + pos from the same metadata we used for season_war above.
+    if metas:
+        sums = sums.merge(name_pos, on="player_id", how="left")
 
     career_path = EVENTS / f"career_seasons_sum_{TAG}.csv"
     cols = ["player_id", "name", "pos", "team", "teams",

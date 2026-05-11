@@ -249,6 +249,8 @@ nav#view-bar select {
   margin: 0 0 0.5rem;
 }
 
+#table-section { margin-top: 1.5rem; }
+
 #chart {
   height: 380px;
   width: 100%;
