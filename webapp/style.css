@@ -214,6 +214,23 @@ tr:nth-child(even) td {
   font-variant-numeric: tabular-nums;
 }
 
+#load-more {
+  display: block;
+  margin: 0.75rem auto 0;
+  padding: 0.4rem 1rem;
+  font: inherit;
+  background: var(--bg);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#load-more:hover {
+  background: var(--row-alt);
+  border-color: var(--accent);
+}
+
 footer {
   margin-top: 2rem;
   color: var(--muted);

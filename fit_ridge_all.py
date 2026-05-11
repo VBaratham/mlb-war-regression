@@ -245,11 +245,53 @@ else:
     ros = pd.concat(roster_frames, ignore_index=True)
     ros["name"] = ros["first"].fillna("") + " " + ros["last"].fillna("")
     ros = ros[["player_id", "name", "team", "pos", "year"]]
+# Pick primary position by mode across a player's career rather than the
+# last roster listing -- guards against single-year data errors (e.g. the
+# 2005 CLE roster file lists Juan Gonzalez, a career OF, as P). Ties broken
+# by most recent appearance at that position.
+ros_nonempty = ros.dropna(subset=["pos"])
+ros_nonempty = ros_nonempty[ros_nonempty["pos"].astype(str).str.len() > 0]
+pos_counts = (ros_nonempty
+              .groupby(["player_id", "pos"])
+              .agg(n=("year", "size"), recency=("year", "max"))
+              .reset_index()
+              .sort_values(["player_id", "n", "recency"], ascending=[True, False, False])
+              .drop_duplicates("player_id", keep="first")
+              [["player_id", "pos"]])
+
+# Team: emit the modal team (replaces last-team) plus a pipe-joined
+# chronological list of every team this player appeared on. The webapp
+# bolds the modal entry in the multi-team display.
+ros_teams = ros.dropna(subset=["team"])
+ros_teams = ros_teams[ros_teams["team"].astype(str).str.len() > 0]
+team_counts = (ros_teams
+               .groupby(["player_id", "team"])
+               .agg(n=("year", "size"), recency=("year", "max"))
+               .reset_index()
+               .sort_values(["player_id", "n", "recency"], ascending=[True, False, False])
+               .drop_duplicates("player_id", keep="first")
+               [["player_id", "team"]]
+               .rename(columns={"team": "modal_team"}))
+team_first_year = (ros_teams
+                   .groupby(["player_id", "team"])["year"].min()
+                   .reset_index()
+                   .sort_values(["player_id", "year"]))
+teams_chronological = (team_first_year
+                       .groupby("player_id")["team"]
+                       .apply(lambda s: "|".join(s))
+                       .reset_index()
+                       .rename(columns={"team": "teams"}))
+
+# Most recent roster row for name + last_year, then swap in modal pos/team.
 ros = ros.sort_values("year").drop_duplicates("player_id", keep="last")
-ros = ros.rename(columns={"year": "last_year"})
+ros = ros.drop(columns=["pos", "team"])
+ros = (ros.merge(pos_counts, on="player_id", how="left")
+          .merge(team_counts, on="player_id", how="left")
+          .merge(teams_chronological, on="player_id", how="left"))
+ros = ros.rename(columns={"year": "last_year", "modal_team": "team"})
 out = out.merge(ros, on="player_id", how="left")
 
-cols = ["player_id", "name", "last_year", "team", "pos",
+cols = ["player_id", "name", "last_year", "team", "teams", "pos",
         "off_runs_per_inning", "pit_runs_per_inning", "fld_runs_per_inning",
         "off_innings", "pit_innings", "fld_innings",
         "off_raa", "pit_raa", "fld_raa", "total_raa",

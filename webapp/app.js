@@ -8,7 +8,7 @@
 const DATA_BASE = "../data/events/";
 
 const SNAPSHOT_TOP_N_DEFAULT = 10;
-const TABLE_LIMIT = 200;
+const TABLE_PAGE = 200;
 
 const state = {
   manifest: null,
@@ -17,6 +17,7 @@ const state = {
   snapshots: null,     // { 'YYYY-MM-DD': rows[] } once loaded
   filters: { search: "", positions: new Set(), minInn: 500 },
   sort: { key: "total_war", dir: "desc" },
+  visibleLimit: TABLE_PAGE,
   topN: SNAPSHOT_TOP_N_DEFAULT,
 };
 
@@ -96,19 +97,32 @@ async function switchView(view) {
   render();
 }
 
+function resetVisible() {
+  state.visibleLimit = TABLE_PAGE;
+}
+
 function hookControls() {
   const $ = id => document.getElementById(id);
   $("view").addEventListener("change", e => switchView(e.target.value));
-  $("search").addEventListener("input", e => { state.filters.search = e.target.value.toLowerCase(); render(); });
+  $("search").addEventListener("input", e => {
+    state.filters.search = e.target.value.toLowerCase();
+    resetVisible();
+    render();
+  });
   document.querySelectorAll("#pos-group input[type=checkbox]").forEach(cb => {
     cb.addEventListener("change", () => {
       const sel = new Set();
       document.querySelectorAll("#pos-group input:checked").forEach(c => sel.add(c.value));
       state.filters.positions = sel;
+      resetVisible();
       render();
     });
   });
-  $("min-inn").addEventListener("input", e => { state.filters.minInn = parseInt(e.target.value) || 0; render(); });
+  $("min-inn").addEventListener("input", e => {
+    state.filters.minInn = parseInt(e.target.value) || 0;
+    resetVisible();
+    render();
+  });
   document.querySelectorAll("#leaderboard th[data-sort]").forEach(th => {
     th.addEventListener("click", () => {
       const key = th.dataset.sort;
@@ -119,20 +133,28 @@ function hookControls() {
         state.sort.key = key;
         state.sort.dir = def;
       }
+      resetVisible();
       render();
     });
   });
   $("topn").addEventListener("input", e => { state.topN = Math.max(1, parseInt(e.target.value) || SNAPSHOT_TOP_N_DEFAULT); renderChart(); });
+  $("load-more").addEventListener("click", () => {
+    state.visibleLimit += TABLE_PAGE;
+    render();
+  });
 }
 
 function totalInnings(r) {
   return (r.off_innings || 0) + (r.pit_innings || 0) + (r.fld_innings || 0);
 }
 
-function filteredRows() {
-  const { search, positions, minInn } = state.filters;
+// Apply position + min-innings + sort -- but NOT the name search. Used by
+// renderTable to compute each row's rank in the leaderboard before the
+// name filter narrows it down, so a search for "Mays" still shows his
+// true overall rank.
+function rankedRows() {
+  const { positions, minInn } = state.filters;
   const rows = state.data.filter(r => {
-    if (search && !(r.name || "").toLowerCase().includes(search)) return false;
     if (positions.size && !positions.has(r.pos)) return false;
     if (totalInnings(r) < minInn) return false;
     return true;
@@ -160,6 +182,17 @@ function fmt(v, digits = 1) {
   return Number(v).toFixed(digits);
 }
 
+function renderTeams(r) {
+  const modal = r.team || "";
+  const list = (r.teams || modal || "").split("|").filter(Boolean);
+  if (!list.length) return "";
+  return list
+    .map(t => t === modal
+      ? `<strong>${escapeHtml(t)}</strong>`
+      : escapeHtml(t))
+    .join(", ");
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -177,14 +210,22 @@ function renderSortIndicators() {
 
 function renderTable() {
   renderSortIndicators();
-  const rows = filteredRows();
+  const ranked = rankedRows();
+  const search = state.filters.search;
+  // Stamp each row with its pre-search rank, then narrow by name search.
+  const ranks = new Map();
+  ranked.forEach((r, i) => ranks.set(r.player_id, i + 1));
+  const rows = search
+    ? ranked.filter(r => (r.name || "").toLowerCase().includes(search))
+    : ranked;
   const tbody = document.querySelector("#leaderboard tbody");
-  tbody.innerHTML = rows.slice(0, TABLE_LIMIT).map((r, i) => `
+  const shown = Math.min(rows.length, state.visibleLimit);
+  tbody.innerHTML = rows.slice(0, shown).map(r => `
     <tr>
-      <td class="num">${i + 1}</td>
+      <td class="num">${ranks.get(r.player_id)}</td>
       <td>${escapeHtml(r.name || r.player_id || "")}</td>
       <td>${escapeHtml(r.pos || "")}</td>
-      <td>${escapeHtml(r.team || "")}</td>
+      <td>${renderTeams(r)}</td>
       <td class="num">${fmt(r.total_war)}</td>
       <td class="num">${fmt(r.off_war)}</td>
       <td class="num">${fmt(r.pit_war)}</td>
@@ -199,12 +240,25 @@ function renderTable() {
     : state.manifest.current_season.label;
   document.getElementById("table-title").textContent =
     `${title} — ${rows.length.toLocaleString()} qualifiers ` +
-    `(top ${Math.min(rows.length, TABLE_LIMIT)} shown)`;
+    `(showing ${shown.toLocaleString()})`;
+
+  const btn = document.getElementById("load-more");
+  if (rows.length > shown) {
+    const remaining = rows.length - shown;
+    btn.textContent = `Load ${Math.min(remaining, TABLE_PAGE).toLocaleString()} more`;
+    btn.hidden = false;
+  } else {
+    btn.hidden = true;
+  }
 }
 
 function renderChart() {
   if (!state.snapshots) return;
-  const top = filteredRows().slice(0, state.topN);
+  // Chart uses the same rows the table shows, including the name search.
+  const search = state.filters.search;
+  let ranked = rankedRows();
+  if (search) ranked = ranked.filter(r => (r.name || "").toLowerCase().includes(search));
+  const top = ranked.slice(0, state.topN);
   const dates = Object.keys(state.snapshots).sort();
   if (!dates.length) return;
 
