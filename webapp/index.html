@@ -25,28 +25,19 @@
 
 <section id="controls">
   <input id="search" type="search" placeholder="filter by name...">
-  <label>Position
-    <select id="pos">
-      <option value="">All</option>
-      <option>P</option><option>C</option>
-      <option>1B</option><option>2B</option>
-      <option>3B</option><option>SS</option>
-      <option>OF</option><option>DH</option>
-    </select>
-  </label>
+  <fieldset id="pos-group" class="chip-group">
+    <legend>Positions <span class="hint">(none = all)</span></legend>
+    <label class="chip"><input type="checkbox" value="P"><span>P</span></label>
+    <label class="chip"><input type="checkbox" value="C"><span>C</span></label>
+    <label class="chip"><input type="checkbox" value="1B"><span>1B</span></label>
+    <label class="chip"><input type="checkbox" value="2B"><span>2B</span></label>
+    <label class="chip"><input type="checkbox" value="3B"><span>3B</span></label>
+    <label class="chip"><input type="checkbox" value="SS"><span>SS</span></label>
+    <label class="chip"><input type="checkbox" value="OF"><span>OF</span></label>
+    <label class="chip"><input type="checkbox" value="DH"><span>DH</span></label>
+  </fieldset>
   <label>Min total innings
     <input id="min-inn" type="number" value="500" min="0" step="100">
-  </label>
-  <label>Sort by
-    <select id="sort">
-      <option value="total_war">Total WAR</option>
-      <option value="off_war">Offensive WAR</option>
-      <option value="pit_war">Pitching WAR</option>
-      <option value="fld_war">Fielding WAR</option>
-      <option value="total_war_per_season">Total WAR / season</option>
-      <option value="off_war_full_season_rate">Offensive peak rate</option>
-      <option value="pit_war_full_season_rate">Pitching peak rate</option>
-    </select>
   </label>
 </section>
 
@@ -67,16 +58,16 @@
       <thead>
         <tr>
           <th>#</th>
-          <th>Name</th>
-          <th>Pos</th>
-          <th>Team</th>
-          <th class="num">Total WAR</th>
-          <th class="num">Off</th>
-          <th class="num">Pit</th>
-          <th class="num">Fld</th>
-          <th class="num">Innings</th>
-          <th class="num">First yr</th>
-          <th class="num">Last yr</th>
+          <th data-sort="name">Name</th>
+          <th data-sort="pos">Pos</th>
+          <th data-sort="team">Team</th>
+          <th class="num" data-sort="total_war" data-default="desc">Total WAR</th>
+          <th class="num" data-sort="off_war" data-default="desc">Off</th>
+          <th class="num" data-sort="pit_war" data-default="desc">Pit</th>
+          <th class="num" data-sort="fld_war" data-default="desc">Fld</th>
+          <th class="num" data-sort="total_innings" data-default="desc">Innings</th>
+          <th class="num" data-sort="first_year">First yr</th>
+          <th class="num" data-sort="last_year_played">Last yr</th>
         </tr>
       </thead>
       <tbody></tbody>

@@ -15,7 +15,8 @@ const state = {
   view: null,          // 'all_time' | 'current'
   data: null,          // current leaderboard rows
   snapshots: null,     // { 'YYYY-MM-DD': rows[] } once loaded
-  filters: { search: "", pos: "", minInn: 500, sort: "total_war" },
+  filters: { search: "", positions: new Set(), minInn: 500 },
+  sort: { key: "total_war", dir: "desc" },
   topN: SNAPSHOT_TOP_N_DEFAULT,
 };
 
@@ -99,9 +100,28 @@ function hookControls() {
   const $ = id => document.getElementById(id);
   $("view").addEventListener("change", e => switchView(e.target.value));
   $("search").addEventListener("input", e => { state.filters.search = e.target.value.toLowerCase(); render(); });
-  $("pos").addEventListener("change", e => { state.filters.pos = e.target.value; render(); });
+  document.querySelectorAll("#pos-group input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const sel = new Set();
+      document.querySelectorAll("#pos-group input:checked").forEach(c => sel.add(c.value));
+      state.filters.positions = sel;
+      render();
+    });
+  });
   $("min-inn").addEventListener("input", e => { state.filters.minInn = parseInt(e.target.value) || 0; render(); });
-  $("sort").addEventListener("change", e => { state.filters.sort = e.target.value; render(); });
+  document.querySelectorAll("#leaderboard th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      const def = th.dataset.default || "asc";
+      if (state.sort.key === key) {
+        state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+      } else {
+        state.sort.key = key;
+        state.sort.dir = def;
+      }
+      render();
+    });
+  });
   $("topn").addEventListener("input", e => { state.topN = Math.max(1, parseInt(e.target.value) || SNAPSHOT_TOP_N_DEFAULT); renderChart(); });
 }
 
@@ -110,14 +130,28 @@ function totalInnings(r) {
 }
 
 function filteredRows() {
-  const { search, pos, minInn, sort } = state.filters;
+  const { search, positions, minInn } = state.filters;
   const rows = state.data.filter(r => {
     if (search && !(r.name || "").toLowerCase().includes(search)) return false;
-    if (pos && r.pos !== pos) return false;
+    if (positions.size && !positions.has(r.pos)) return false;
     if (totalInnings(r) < minInn) return false;
     return true;
   });
-  rows.sort((a, b) => (Number(b[sort]) || -Infinity) - (Number(a[sort]) || -Infinity));
+  const { key, dir } = state.sort;
+  const mult = dir === "asc" ? 1 : -1;
+  const lookup = key === "total_innings"
+    ? totalInnings
+    : (r => r[key]);
+  rows.sort((a, b) => {
+    const av = lookup(a), bv = lookup(b);
+    const aNum = typeof av === "number" && !isNaN(av);
+    const bNum = typeof bv === "number" && !isNaN(bv);
+    if (aNum && bNum) return (av - bv) * mult;
+    // Push missing values to the end regardless of direction.
+    if (av == null || av === "" || (typeof av === "number" && isNaN(av))) return 1;
+    if (bv == null || bv === "" || (typeof bv === "number" && isNaN(bv))) return -1;
+    return String(av).localeCompare(String(bv)) * mult;
+  });
   return rows;
 }
 
@@ -132,7 +166,17 @@ function escapeHtml(s) {
   }[c]));
 }
 
+function renderSortIndicators() {
+  document.querySelectorAll("#leaderboard th[data-sort]").forEach(th => {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.sort === state.sort.key) {
+      th.classList.add(state.sort.dir === "asc" ? "sort-asc" : "sort-desc");
+    }
+  });
+}
+
 function renderTable() {
+  renderSortIndicators();
   const rows = filteredRows();
   const tbody = document.querySelector("#leaderboard tbody");
   tbody.innerHTML = rows.slice(0, TABLE_LIMIT).map((r, i) => `

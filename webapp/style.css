@@ -87,6 +87,51 @@ nav#view-bar select {
   min-width: 220px;
 }
 
+.chip-group {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.chip-group legend {
+  font-size: 0.9rem;
+  color: var(--muted);
+  padding: 0 0.5rem 0 0;
+}
+
+.chip-group .hint {
+  font-size: 0.8rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.chip input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip:has(input:checked) {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 #chart-section {
   margin: 1.5rem 0;
 }
@@ -139,6 +184,26 @@ th {
   color: var(--fg);
   z-index: 1;
 }
+
+th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+th[data-sort]:hover {
+  color: var(--accent);
+}
+
+th[data-sort]::after {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  margin-left: 0.25em;
+  color: var(--muted);
+}
+
+th.sort-asc::after { content: "▲"; color: var(--accent); }
+th.sort-desc::after { content: "▼"; color: var(--accent); }
 
 tr:nth-child(even) td {
   background: var(--row-alt);
