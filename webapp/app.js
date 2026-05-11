@@ -32,7 +32,10 @@ function displayTeam(t) {
 const SNAPSHOT_TOP_N_DEFAULT = 10;
 const TABLE_PAGE = 200;
 
-const WAR_SORT_KEYS = new Set(["total_war", "off_war", "pit_war", "fld_war"]);
+const WAR_SORT_KEYS = new Set([
+  "total_war", "off_war", "pit_war", "fld_war",
+  "war_per_season", "peak_season_war",
+]);
 
 const state = {
   manifest: null,
@@ -453,8 +456,8 @@ function renderTable() {
       <td class="${rankCls("off_war")}">${fmt(r.off_war)}</td>
       <td class="${rankCls("pit_war")}">${fmt(r.pit_war)}</td>
       <td class="${rankCls("fld_war")}">${fmt(r.fld_war)}</td>
-      <td class="num career-only">${fmt(r.war_per_season)}</td>
-      <td class="num career-only">${fmt(r.peak_season_war)}</td>
+      <td class="${rankCls("war_per_season")} career-only">${fmt(r.war_per_season)}</td>
+      <td class="${rankCls("peak_season_war")} career-only">${fmt(r.peak_season_war)}</td>
       <td class="num">${totalInnings(r).toLocaleString()}</td>
       <td class="num years-col">${r.first_year || ""}</td>
       <td class="num years-col">${r.last_year_played || r.last_year || ""}</td>
