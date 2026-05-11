@@ -1,0 +1,2 @@
+PATH=/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin
+0 6 * * * /Users/vbaratham/claude/mlb_war_regression/refresh.sh >> /Users/vbaratham/claude/mlb_war_regression/refresh.log 2>&1
