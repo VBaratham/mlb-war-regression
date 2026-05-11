@@ -1,9 +1,20 @@
 {
-  "generated_at": "2026-05-11T07:04:47Z",
+  "generated_at": "2026-05-11T07:33:04Z",
   "all_time": {
     "tag": "all",
     "label": "All-time",
     "leaderboard": "coefficients_all_enriched.csv"
   },
-  "current_season": null
+  "current_season": {
+    "tag": "2026",
+    "season": 2026,
+    "label": "2026 season",
+    "leaderboard": "coefficients_2026_enriched.csv",
+    "snapshots": [
+      {
+        "date": "2026-05-11",
+        "file": "snapshots/2026/2026-05-11.csv"
+      }
+    ]
+  }
 }
