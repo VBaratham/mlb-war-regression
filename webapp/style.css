@@ -295,18 +295,25 @@ th {
 th[data-sort] {
   cursor: pointer;
   user-select: none;
+  position: relative;
 }
 
 th[data-sort]:hover {
   color: var(--accent);
 }
 
+/* Absolute-position the sort glyph so it doesn't sit in the inline flow and
+ * shift the header text away from the right edge -- otherwise numeric
+ * headers don't right-align with their right-aligned data cells. */
 th[data-sort]::after {
   content: "";
-  display: inline-block;
-  width: 0.6em;
-  margin-left: 0.25em;
+  position: absolute;
+  right: 0.15em;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--muted);
+  font-size: 0.75em;
+  pointer-events: none;
 }
 
 th.sort-asc::after { content: "▲"; color: var(--accent); }
@@ -316,13 +323,15 @@ body[data-view="season"] .years-col {
   display: none;
 }
 
+/* The rank-col tint must be OPAQUE for the sticky <th>: a translucent
+ * background lets row data show through when the body scrolls under it. */
 th.rank-col, td.rank-col {
   font-weight: 700;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
 }
 th.rank-col { color: var(--accent); }
 tr:nth-child(even) td.rank-col {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--row-alt));
 }
 
 tr:nth-child(even) td {
