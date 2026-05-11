@@ -288,9 +288,13 @@ async function openPlayerDetail(playerId) {
   modal.hidden = false;
   document.getElementById("player-modal-title").textContent =
     career.name || rows[0].name || playerId;
-  const teams = (career.teams || career.team || "").split("|").filter(Boolean);
-  const teamLabel = teams.length
-    ? teams.map(t => t === career.team
+  const teamsChrono = (career.teams || career.team || "").split("|").filter(Boolean);
+  const modalTeam = career.team || "";
+  const teamsOrdered = modalTeam && teamsChrono.includes(modalTeam)
+    ? [modalTeam, ...teamsChrono.filter(t => t !== modalTeam)]
+    : teamsChrono;
+  const teamLabel = teamsOrdered.length
+    ? teamsOrdered.map(t => t === modalTeam
         ? `<strong>${escapeHtml(displayTeam(t))}</strong>`
         : escapeHtml(displayTeam(t))).join(", ")
     : "";
@@ -379,15 +383,27 @@ function closePlayerDetail() {
   document.getElementById("player-modal").hidden = true;
 }
 
+const TEAMS_VISIBLE = 2;
+
 function renderTeams(r) {
   const modal = r.team || "";
-  const list = (r.teams || modal || "").split("|").filter(Boolean);
-  if (!list.length) return "";
-  return list
-    .map(t => t === modal
-      ? `<strong>${escapeHtml(displayTeam(t))}</strong>`
-      : escapeHtml(displayTeam(t)))
-    .join(", ");
+  const chronological = (r.teams || modal || "").split("|").filter(Boolean);
+  if (!chronological.length) return "";
+  // Put the modal team first, then the rest in their original chronological
+  // order. Show the first few inline; tuck the rest behind a "+N" with the
+  // full list as a hover tooltip.
+  const ordered = modal && chronological.includes(modal)
+    ? [modal, ...chronological.filter(t => t !== modal)]
+    : chronological;
+  const visible = ordered.slice(0, TEAMS_VISIBLE);
+  const hiddenCount = ordered.length - visible.length;
+  const inline = visible.map((t, i) => {
+    const html = escapeHtml(displayTeam(t));
+    return i === 0 && t === modal ? `<strong>${html}</strong>` : html;
+  }).join(", ");
+  const more = hiddenCount > 0 ? `, +${hiddenCount}` : "";
+  const fullList = ordered.map(displayTeam).join(", ");
+  return `<span class="teams" title="${escapeHtml(fullList)}">${inline}${more}</span>`;
 }
 
 function escapeHtml(s) {
