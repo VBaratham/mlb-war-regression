@@ -12,9 +12,11 @@ const TABLE_PAGE = 200;
 
 const state = {
   manifest: null,
-  view: null,          // 'all_time' | 'current'
-  data: null,          // current leaderboard rows
+  view: null,          // 'all_time' | 'current' | 'season'
+  data: null,          // current leaderboard rows (the table)
   snapshots: null,     // { 'YYYY-MM-DD': rows[] } once loaded
+  seasonWar: null,     // long-format season_war rows once loaded (lazy)
+  seasonYear: null,    // active year for the single-season view
   filters: { search: "", positions: new Set(), minInn: 500 },
   sort: { key: "total_war", dir: "desc" },
   visibleLimit: TABLE_PAGE,
@@ -49,33 +51,58 @@ function populateViewSelector() {
   if (state.manifest.current_season) {
     sel.append(new Option(state.manifest.current_season.label, "current"));
   }
+  if (state.manifest.season_index && state.manifest.season_index.seasons.length) {
+    sel.append(new Option("Single season", "season"));
+  }
   if (!sel.options.length) {
     sel.append(new Option("(no data)", ""));
     sel.disabled = true;
   }
+  const seasonSel = document.getElementById("season");
+  seasonSel.innerHTML = "";
+  if (state.manifest.season_index) {
+    const seasons = [...state.manifest.season_index.seasons].sort((a, b) => b - a);
+    seasons.forEach(y => seasonSel.append(new Option(String(y), String(y))));
+  }
+}
+
+async function ensureSeasonWarLoaded() {
+  if (state.seasonWar) return;
+  if (!state.manifest.season_index) return;
+  state.seasonWar = await loadCSV(state.manifest.season_index.file);
 }
 
 async function switchView(view) {
   state.view = view;
-  const node = view === "all_time"
-    ? state.manifest.all_time
-    : state.manifest.current_season;
-  if (!node) return;
+  document.getElementById("season-picker").hidden = view !== "season";
 
-  state.data = await loadCSV(node.leaderboard);
-
-  // Current-season chart needs the per-date snapshot CSVs.
-  if (view === "current" && node.snapshots && node.snapshots.length) {
-    const entries = await Promise.all(node.snapshots.map(async s => {
-      try {
-        return [s.date, await loadCSV(s.file)];
-      } catch (e) {
-        console.warn(`failed to load snapshot ${s.date}: ${e}`);
-        return [s.date, null];
-      }
-    }));
-    state.snapshots = Object.fromEntries(entries.filter(([_, v]) => v));
-  } else {
+  if (view === "all_time" || view === "current") {
+    const node = view === "all_time"
+      ? state.manifest.all_time
+      : state.manifest.current_season;
+    if (!node) return;
+    state.data = await loadCSV(node.leaderboard);
+    if (view === "current" && node.snapshots && node.snapshots.length) {
+      const entries = await Promise.all(node.snapshots.map(async s => {
+        try {
+          return [s.date, await loadCSV(s.file)];
+        } catch (e) {
+          console.warn(`failed to load snapshot ${s.date}: ${e}`);
+          return [s.date, null];
+        }
+      }));
+      state.snapshots = Object.fromEntries(entries.filter(([_, v]) => v));
+    } else {
+      state.snapshots = null;
+    }
+  } else if (view === "season") {
+    await ensureSeasonWarLoaded();
+    const seasons = state.manifest.season_index.seasons;
+    if (state.seasonYear === null || !seasons.includes(state.seasonYear)) {
+      state.seasonYear = Math.max(...seasons);
+      document.getElementById("season").value = String(state.seasonYear);
+    }
+    state.data = state.seasonWar.filter(r => Number(r.season) === state.seasonYear);
     state.snapshots = null;
   }
 
@@ -84,16 +111,17 @@ async function switchView(view) {
     && Object.keys(state.snapshots).length >= 1;
   document.getElementById("chart-section").hidden = !chartVisible;
 
-  // Tweak default min-innings per view: all-time benefits from a higher
-  // floor (so the table isn't dominated by 19th-century cup-of-coffee guys).
-  if (view === "all_time" && state.filters.minInn < 1500) {
-    state.filters.minInn = 1500;
-    document.getElementById("min-inn").value = 1500;
-  } else if (view === "current" && state.filters.minInn > 200) {
-    state.filters.minInn = 50;
-    document.getElementById("min-inn").value = 50;
-  }
+  // Sensible default min-innings per view: all-time benefits from a higher
+  // floor (so the table isn't dominated by 19th-century cup-of-coffee guys);
+  // single seasons need a much lower floor since players accumulate few innings.
+  let target;
+  if (view === "all_time") target = 1500;
+  else if (view === "season") target = 100;
+  else target = 50;
+  state.filters.minInn = target;
+  document.getElementById("min-inn").value = target;
 
+  resetVisible();
   render();
 }
 
@@ -142,6 +170,22 @@ function hookControls() {
     state.visibleLimit += TABLE_PAGE;
     render();
   });
+  $("season").addEventListener("change", async e => {
+    state.seasonYear = parseInt(e.target.value);
+    await switchView("season");
+  });
+  document.querySelector("#leaderboard tbody").addEventListener("click", e => {
+    const tr = e.target.closest("tr[data-player-id]");
+    if (tr) openPlayerDetail(tr.dataset.playerId);
+  });
+  document.querySelectorAll("#player-modal [data-close]").forEach(el => {
+    el.addEventListener("click", closePlayerDetail);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !document.getElementById("player-modal").hidden) {
+      closePlayerDetail();
+    }
+  });
 }
 
 function totalInnings(r) {
@@ -180,6 +224,88 @@ function rankedRows() {
 function fmt(v, digits = 1) {
   if (v == null || v === "" || isNaN(v)) return "";
   return Number(v).toFixed(digits);
+}
+
+async function openPlayerDetail(playerId) {
+  await ensureSeasonWarLoaded();
+  if (!state.seasonWar) return;
+  const rows = state.seasonWar
+    .filter(r => r.player_id === playerId)
+    .sort((a, b) => Number(a.season) - Number(b.season));
+  if (!rows.length) return;
+  const career = state.data.find(r => r.player_id === playerId) || rows[rows.length - 1];
+
+  const modal = document.getElementById("player-modal");
+  modal.hidden = false;
+  document.getElementById("player-modal-title").textContent =
+    career.name || rows[0].name || playerId;
+  const teams = (career.teams || career.team || "").split("|").filter(Boolean);
+  const teamLabel = teams.length
+    ? teams.map(t => t === career.team ? `<strong>${escapeHtml(t)}</strong>` : escapeHtml(t)).join(", ")
+    : "";
+  document.getElementById("player-modal-sub").innerHTML =
+    `${escapeHtml(career.pos || "")} &middot; ${teamLabel} &middot; ` +
+    `${rows.length} season${rows.length > 1 ? "s" : ""} ` +
+    `(${rows[0].season}–${rows[rows.length - 1].season})`;
+
+  const tbody = document.querySelector("#player-seasons tbody");
+  let cumulative = 0;
+  const cumYears = [], cumWar = [];
+  tbody.innerHTML = rows.map(r => {
+    cumulative += Number(r.total_war) || 0;
+    cumYears.push(String(r.season));
+    cumWar.push(cumulative);
+    return `<tr>
+      <td class="num">${r.season}</td>
+      <td class="num">${fmt(r.total_war)}</td>
+      <td class="num">${fmt(r.off_war)}</td>
+      <td class="num">${fmt(r.pit_war)}</td>
+      <td class="num">${fmt(r.fld_war)}</td>
+      <td class="num">${Number(r.off_innings || 0).toLocaleString()}</td>
+      <td class="num">${Number(r.pit_innings || 0).toLocaleString()}</td>
+      <td class="num">${Number(r.fld_innings || 0).toLocaleString()}</td>
+    </tr>`;
+  }).join("");
+
+  const css = getComputedStyle(document.documentElement);
+  const fg = css.getPropertyValue("--fg").trim() || "#1a1a1a";
+  const bg = css.getPropertyValue("--bg").trim() || "#ffffff";
+  const accent = css.getPropertyValue("--accent").trim() || "#1f4a80";
+  const gridc = css.getPropertyValue("--border").trim() || "#d8d8d8";
+  Plotly.react("player-chart", [
+    {
+      x: rows.map(r => String(r.season)),
+      y: rows.map(r => Number(r.total_war)),
+      type: "bar",
+      name: "Season WAR",
+      marker: { color: rows.map(r => (Number(r.total_war) >= 0 ? accent : "#c44")) },
+      hovertemplate: "%{x}: %{y:.2f} WAR<extra></extra>",
+    },
+    {
+      x: cumYears,
+      y: cumWar,
+      type: "scatter",
+      mode: "lines+markers",
+      name: "Cumulative",
+      yaxis: "y2",
+      line: { color: fg },
+      hovertemplate: "%{x}: %{y:.1f} cumulative WAR<extra></extra>",
+    },
+  ], {
+    margin: { t: 20, l: 50, r: 50, b: 40 },
+    paper_bgcolor: bg,
+    plot_bgcolor: bg,
+    font: { color: fg },
+    xaxis: { title: "season", type: "category", gridcolor: gridc, linecolor: gridc },
+    yaxis: { title: "season WAR", gridcolor: gridc, linecolor: gridc, zerolinecolor: gridc },
+    yaxis2: { title: "cumulative WAR", overlaying: "y", side: "right", showgrid: false, linecolor: gridc },
+    legend: { orientation: "h", y: -0.2 },
+    barmode: "relative",
+  }, { responsive: true, displaylogo: false });
+}
+
+function closePlayerDetail() {
+  document.getElementById("player-modal").hidden = true;
 }
 
 function renderTeams(r) {
@@ -221,7 +347,7 @@ function renderTable() {
   const tbody = document.querySelector("#leaderboard tbody");
   const shown = Math.min(rows.length, state.visibleLimit);
   tbody.innerHTML = rows.slice(0, shown).map(r => `
-    <tr>
+    <tr data-player-id="${escapeHtml(r.player_id || "")}">
       <td class="num">${ranks.get(r.player_id)}</td>
       <td>${escapeHtml(r.name || r.player_id || "")}</td>
       <td>${escapeHtml(r.pos || "")}</td>

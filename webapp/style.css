@@ -97,6 +97,71 @@ nav#view-bar #generated {
   border-color: var(--accent);
 }
 
+#leaderboard tbody tr {
+  cursor: pointer;
+}
+
+#leaderboard tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+#player-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+#player-modal[hidden] { display: none; }
+
+#player-modal .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+}
+
+#player-modal .modal-body {
+  position: relative;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: min(900px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem 1.5rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+
+#player-modal h2 { margin: 0 0 0.25rem; }
+
+#player-modal .modal-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.7rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 2rem;
+  height: 2rem;
+}
+
+#player-modal .modal-close:hover { color: var(--accent); }
+
+#player-chart {
+  height: 280px;
+  width: 100%;
+  margin: 0.75rem 0 1rem;
+}
+
+#player-seasons th, #player-seasons td { padding: 0.3rem 0.6rem; }
+
 #controls {
   display: flex;
   flex-wrap: wrap;

@@ -26,6 +26,11 @@ python3 build_dataset.py --years "$SEASON" --tag "$TAG"
 python3 fit_ridge_all.py --tag "$TAG"
 python3 make_views.py --tag "$TAG"
 
+# Per-season fit. We update the current season's rows inside the all-time
+# season_war table (incremental: replaces just that year's entries) so the
+# webapp's season-view + player-detail panel see fresh data each day.
+python3 fit_per_season.py --tag all --seasons "$SEASON"
+
 # Drop a dated snapshot and update the manifest the webapp reads.
 python3 snapshot.py --tag "$TAG"
 
@@ -38,6 +43,7 @@ git add -f \
     data/events/coefficients_all.csv \
     data/events/coefficients_all_enriched.csv 2>/dev/null || true
 git add -f data/events/snapshots/"$TAG"/*.csv 2>/dev/null || true
+git add -f data/events/season_war_all.csv 2>/dev/null || true
 git add -f data/events/manifest.json
 
 if git diff --cached --quiet; then

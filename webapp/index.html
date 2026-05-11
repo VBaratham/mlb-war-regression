@@ -20,6 +20,9 @@
   <label>View:
     <select id="view"></select>
   </label>
+  <label id="season-picker" hidden>Season:
+    <select id="season"></select>
+  </label>
   <span id="generated"></span>
   <button id="theme-toggle" type="button" title="Toggle dark mode">🌙</button>
 </nav>
@@ -76,6 +79,34 @@
   </div>
   <button id="load-more" type="button" hidden>Load more</button>
 </section>
+
+<div id="player-modal" hidden role="dialog" aria-modal="true" aria-labelledby="player-modal-title">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-body">
+    <button class="modal-close" type="button" aria-label="Close" data-close="1">&times;</button>
+    <h2 id="player-modal-title"></h2>
+    <p id="player-modal-sub" class="note"></p>
+    <div id="player-chart"></div>
+    <h3>Season by season</h3>
+    <div class="table-wrap">
+      <table id="player-seasons">
+        <thead>
+          <tr>
+            <th class="num">Season</th>
+            <th class="num">Total WAR</th>
+            <th class="num">Off</th>
+            <th class="num">Pit</th>
+            <th class="num">Fld</th>
+            <th class="num">Off inn</th>
+            <th class="num">Pit inn</th>
+            <th class="num">Fld inn</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <footer>
   <p>Data refreshed daily by a cronjob in the source repo.</p>

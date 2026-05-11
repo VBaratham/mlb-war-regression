@@ -92,12 +92,23 @@ def _detect_tags() -> dict:
     return {"all_time": all_time, "current": current}
 
 
+def _list_seasons(tag: str) -> list:
+    """Return the sorted unique seasons present in season_war_<tag>.parquet,
+    or [] if it doesn't exist."""
+    p = EVENTS / f"season_war_{tag}.parquet"
+    if not p.exists():
+        return []
+    df = pd.read_parquet(p, columns=["season"])
+    return sorted(int(s) for s in df["season"].unique())
+
+
 def write_manifest():
     found = _detect_tags()
     manifest = {
         "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0, tzinfo=None).isoformat() + "Z",
         "all_time": None,
         "current_season": None,
+        "season_index": None,
     }
     if found["all_time"]:
         t = found["all_time"]
@@ -106,6 +117,13 @@ def write_manifest():
             "label": _label_for(t),
             "leaderboard": f"coefficients_{t}_enriched.csv",
         }
+        seasons = _list_seasons(t)
+        if seasons:
+            manifest["season_index"] = {
+                "tag": t,
+                "file": f"season_war_{t}.csv",
+                "seasons": seasons,
+            }
     if found["current"]:
         t, season = found["current"]
         snapshots = list_snapshot_dates(t)
