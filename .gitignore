@@ -2,12 +2,13 @@
 data/raw/
 
 # Intermediate parsed events (~2.4GB; reproducible via build_half_innings.py)
-data/events/events_all.csv
-data/events/events_2024.csv
+data/events/events_*.csv
 
 # Half-inning aggregations (large, reproducible)
-data/events/half_innings_all.parquet
-data/events/half_innings_2024.parquet
+data/events/half_innings_*.parquet
+
+# Loader fetch caches (Chadwick register, MLB Stats API feed JSON)
+data/cache/
 
 # Python
 __pycache__/

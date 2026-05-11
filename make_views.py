@@ -10,13 +10,20 @@
      hitting at +0.04 runs/inning is more impressive than a 1B at the same
      rate, so position-relative scores answer "best-at-position" questions.
 """
+import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
 
+ap = argparse.ArgumentParser()
+ap.add_argument("--tag", default="all",
+                help="dataset tag built by build_dataset.py")
+args = ap.parse_args()
+TAG = args.tag
+
 ROOT = Path(__file__).parent
-COEFS = ROOT / "data" / "events" / "coefficients_all.parquet"
-HALF = ROOT / "data" / "events" / "half_innings_all.parquet"
+COEFS = ROOT / "data" / "events" / f"coefficients_{TAG}.parquet"
+HALF = ROOT / "data" / "events" / f"half_innings_{TAG}.parquet"
 OUT_DIR = ROOT / "data" / "events"
 
 print("loading...")
@@ -99,10 +106,10 @@ coefs["pit_pos_z"] = position_zscores(
     coefs, "pit_runs_per_inning", "pit_innings", "pos_group", min_innings=500)
 
 # Save enriched table.
-ENRICHED = OUT_DIR / "coefficients_all_enriched.parquet"
+ENRICHED = OUT_DIR / f"coefficients_{TAG}_enriched.parquet"
 coefs.to_parquet(ENRICHED, index=False)
 coefs.sort_values("total_war_per_season", ascending=False).to_csv(
-    OUT_DIR / "coefficients_all_enriched.csv", index=False)
+    OUT_DIR / f"coefficients_{TAG}_enriched.csv", index=False)
 print(f"wrote {ENRICHED}")
 
 # Display: per-calendar-season leaders.

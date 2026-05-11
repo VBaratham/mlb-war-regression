@@ -11,16 +11,29 @@ scoring environment; park fixed effects absorb stadium effects (Coors,
 Petco, Fenway, etc.) so a Rockies hitter isn't credited with park-inflated
 production.
 """
+import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from scipy.sparse import csr_matrix, vstack
 from sklearn.linear_model import Ridge
 
+ap = argparse.ArgumentParser()
+ap.add_argument("--tag", default="all",
+                help="dataset tag built by build_dataset.py; reads half_innings_<tag>.parquet etc.")
+args = ap.parse_args()
+TAG = args.tag
+
 ROOT = Path(__file__).parent
-HALF = ROOT / "data" / "events" / "half_innings_all.parquet"
-PARK = ROOT / "data" / "events" / "game_park.csv"
-OUT = ROOT / "data" / "events" / "coefficients_all.parquet"
+HALF = ROOT / "data" / "events" / f"half_innings_{TAG}.parquet"
+# Back-compat: original retro pipeline wrote game_park.csv (no tag).
+PARK = ROOT / "data" / "events" / f"game_park_{TAG}.csv"
+if not PARK.exists():
+    legacy = ROOT / "data" / "events" / "game_park.csv"
+    if legacy.exists():
+        PARK = legacy
+ROSTERS = ROOT / "data" / "events" / f"rosters_{TAG}.csv"
+OUT = ROOT / "data" / "events" / f"coefficients_{TAG}.parquet"
 
 print("loading half-innings...")
 df = pd.read_parquet(HALF)
@@ -207,28 +220,33 @@ out["pit_war"] = out["pit_raa"] / 10.0
 out["fld_war"] = out["fld_raa"] / 10.0
 out["total_war"] = out["total_raa"] / 10.0
 
-# Join roster files for names. Use most recent season's roster for each player
-# (older listing for retired players, newest for active).
+# Load unified roster table emitted by build_dataset.py. Keep most-recent
+# listing per player for name and primary position.
 print("loading rosters...")
-roster_dir = ROOT / "data" / "raw"
-roster_frames = []
-for ydir in roster_dir.iterdir():
-    if not (ydir.is_dir() and ydir.name.isdigit()):
-        continue
-    year = int(ydir.name)
-    for f in ydir.glob("*.ROS"):
-        try:
-            r = pd.read_csv(f, header=None, usecols=[0, 1, 2, 5, 6],
-                            names=["player_id", "last", "first", "team", "pos"])
-            r["year"] = year
-            roster_frames.append(r)
-        except Exception:
-            pass
-ros = pd.concat(roster_frames, ignore_index=True)
-ros["name"] = ros["first"].fillna("") + " " + ros["last"].fillna("")
-# Keep most-recent listing per player for name and primary position.
+if ROSTERS.exists():
+    ros = pd.read_csv(ROSTERS)
+else:
+    # Back-compat path: fall back to globbing *.ROS under data/raw.
+    print(f"  {ROSTERS} not found, falling back to raw *.ROS scan")
+    roster_dir = ROOT / "data" / "raw"
+    roster_frames = []
+    for ydir in roster_dir.iterdir():
+        if not (ydir.is_dir() and ydir.name.isdigit()):
+            continue
+        year = int(ydir.name)
+        for f in ydir.glob("*.ROS"):
+            try:
+                r = pd.read_csv(f, header=None, usecols=[0, 1, 2, 5, 6],
+                                names=["player_id", "last", "first", "team", "pos"])
+                r["year"] = year
+                roster_frames.append(r)
+            except Exception:
+                pass
+    ros = pd.concat(roster_frames, ignore_index=True)
+    ros["name"] = ros["first"].fillna("") + " " + ros["last"].fillna("")
+    ros = ros[["player_id", "name", "team", "pos", "year"]]
 ros = ros.sort_values("year").drop_duplicates("player_id", keep="last")
-ros = ros[["player_id", "name", "team", "pos", "year"]].rename(columns={"year": "last_year"})
+ros = ros.rename(columns={"year": "last_year"})
 out = out.merge(ros, on="player_id", how="left")
 
 cols = ["player_id", "name", "last_year", "team", "pos",
