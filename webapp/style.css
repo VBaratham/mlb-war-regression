@@ -312,6 +312,15 @@ th[data-sort]::after {
 th.sort-asc::after { content: "▲"; color: var(--accent); }
 th.sort-desc::after { content: "▼"; color: var(--accent); }
 
+th.rank-col, td.rank-col {
+  font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+th.rank-col { color: var(--accent); }
+tr:nth-child(even) td.rank-col {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 tr:nth-child(even) td {
   background: var(--row-alt);
 }

@@ -32,6 +32,8 @@ function displayTeam(t) {
 const SNAPSHOT_TOP_N_DEFAULT = 10;
 const TABLE_PAGE = 200;
 
+const WAR_SORT_KEYS = new Set(["total_war", "off_war", "pit_war", "fld_war"]);
+
 const state = {
   manifest: null,
   view: null,          // 'all_time' | 'current' | 'season'
@@ -41,6 +43,9 @@ const state = {
   seasonYear: null,    // active year for the single-season view
   filters: { search: "", positions: new Set(), minInn: 500 },
   sort: { key: "total_war", dir: "desc" },
+  rankKey: "total_war",   // tracks the most recently picked WAR column;
+                          // the "#" column reflects rank by THIS key so
+                          // sorting by name (etc.) still shows WAR rank.
   visibleLimit: TABLE_PAGE,
   topN: SNAPSHOT_TOP_N_DEFAULT,
 };
@@ -204,6 +209,9 @@ function hookControls() {
         state.sort.key = key;
         state.sort.dir = def;
       }
+      // Remember the most-recent WAR-column sort so the # column keeps
+      // reporting WAR rank even when the user switches to sort by name.
+      if (WAR_SORT_KEYS.has(key)) state.rankKey = key;
       resetVisible();
       render();
     });
@@ -368,9 +376,12 @@ function escapeHtml(s) {
 
 function renderSortIndicators() {
   document.querySelectorAll("#leaderboard th[data-sort]").forEach(th => {
-    th.classList.remove("sort-asc", "sort-desc");
+    th.classList.remove("sort-asc", "sort-desc", "rank-col");
     if (th.dataset.sort === state.sort.key) {
       th.classList.add(state.sort.dir === "asc" ? "sort-asc" : "sort-desc");
+    }
+    if (th.dataset.sort === state.rankKey) {
+      th.classList.add("rank-col");
     }
   });
 }
@@ -378,25 +389,32 @@ function renderSortIndicators() {
 function renderTable() {
   renderSortIndicators();
   const ranked = rankedRows();
-  const search = state.filters.search;
-  // Stamp each row with its pre-search rank, then narrow by name search.
+  // Compute ranks against the last-selected WAR column (state.rankKey),
+  // not the current sort. So the "#" column reports e.g. "rank by off_war"
+  // even when the user re-sorts the table by name.
+  const rankKey = state.rankKey;
+  const byRankKey = [...ranked].sort(
+    (a, b) => (Number(b[rankKey]) || -Infinity) - (Number(a[rankKey]) || -Infinity)
+  );
   const ranks = new Map();
-  ranked.forEach((r, i) => ranks.set(r.player_id, i + 1));
+  byRankKey.forEach((r, i) => ranks.set(r.player_id, i + 1));
+  const search = state.filters.search;
   const rows = search
     ? ranked.filter(r => (r.name || "").toLowerCase().includes(search))
     : ranked;
   const tbody = document.querySelector("#leaderboard tbody");
   const shown = Math.min(rows.length, state.visibleLimit);
+  const rankCls = k => k === rankKey ? "num rank-col" : "num";
   tbody.innerHTML = rows.slice(0, shown).map(r => `
     <tr data-player-id="${escapeHtml(r.player_id || "")}">
       <td class="num">${ranks.get(r.player_id)}</td>
       <td>${escapeHtml(r.name || r.player_id || "")}</td>
       <td>${escapeHtml(r.pos || "")}</td>
       <td>${renderTeams(r)}</td>
-      <td class="num">${fmt(r.total_war)}</td>
-      <td class="num">${fmt(r.off_war)}</td>
-      <td class="num">${fmt(r.pit_war)}</td>
-      <td class="num">${fmt(r.fld_war)}</td>
+      <td class="${rankCls("total_war")}">${fmt(r.total_war)}</td>
+      <td class="${rankCls("off_war")}">${fmt(r.off_war)}</td>
+      <td class="${rankCls("pit_war")}">${fmt(r.pit_war)}</td>
+      <td class="${rankCls("fld_war")}">${fmt(r.fld_war)}</td>
       <td class="num">${totalInnings(r).toLocaleString()}</td>
       <td class="num">${r.first_year || ""}</td>
       <td class="num">${r.last_year_played || r.last_year || ""}</td>
