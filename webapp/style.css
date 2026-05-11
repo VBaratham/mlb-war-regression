@@ -1,0 +1,166 @@
+:root {
+  --fg: #1a1a1a;
+  --muted: #666;
+  --accent: #1f4a80;
+  --border: #d8d8d8;
+  --row-alt: #f5f7fa;
+  --bg: #ffffff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 0 1.25rem 3rem;
+  line-height: 1.45;
+  max-width: 1180px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+header {
+  padding: 1.5rem 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+header .sub {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+header a {
+  color: var(--accent);
+}
+
+nav#view-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+nav#view-bar #generated {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-left: auto;
+}
+
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+#controls label,
+nav#view-bar label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+#controls input,
+#controls select,
+nav#view-bar select {
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--fg);
+  margin-left: 0.25rem;
+}
+
+#controls input[type="search"] {
+  min-width: 220px;
+}
+
+#chart-section {
+  margin: 1.5rem 0;
+}
+
+#chart-section h2,
+#table-section h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+}
+
+#chart {
+  height: 380px;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+label.inline { color: var(--muted); font-size: 0.9rem; }
+label.inline input { width: 4.5rem; }
+
+.table-wrap {
+  max-height: 720px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--fg);
+  z-index: 1;
+}
+
+tr:nth-child(even) td {
+  background: var(--row-alt);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+footer {
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.error {
+  color: #a30000;
+  background: #fff0f0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #f3c2c2;
+  border-radius: 3px;
+  white-space: pre-wrap;
+}
