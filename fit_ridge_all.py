@@ -40,9 +40,12 @@ df = pd.read_parquet(HALF)
 print(f"{len(df):,} half-innings, {df.SEASON.nunique()} seasons "
       f"({df.SEASON.min()}-{df.SEASON.max()})")
 
-# Merge park IDs.
+# Merge park IDs. Coerce GAME_ID to string on both sides -- the statsapi
+# loader emits gamePk integers and CSV/parquet round-trips can disagree on
+# the inferred dtype, which breaks the merge.
 print("loading park lookup...")
-park_lookup = pd.read_csv(PARK)
+park_lookup = pd.read_csv(PARK, dtype={"GAME_ID": str})
+df["GAME_ID"] = df["GAME_ID"].astype(str)
 df = df.merge(park_lookup, on="GAME_ID", how="left")
 n_missing = df["PARK"].isna().sum()
 if n_missing:
