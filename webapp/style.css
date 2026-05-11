@@ -309,7 +309,7 @@ th[data-sort]:hover {
 th[data-sort]::after {
   content: "";
   position: absolute;
-  right: 0.15em;
+  right: 0.35em;
   top: 50%;
   transform: translateY(-50%);
   color: var(--muted);
@@ -342,6 +342,10 @@ tr:nth-child(even) td {
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  /* Extra right padding on numeric columns leaves room for the absolute-
+   * positioned sort arrow on the header while preserving alignment with
+   * the data cells (which use the same padding). */
+  padding-right: 1.4em;
 }
 
 #load-more {
