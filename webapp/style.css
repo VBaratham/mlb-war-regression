@@ -295,7 +295,8 @@ th {
 th[data-sort] {
   cursor: pointer;
   user-select: none;
-  position: relative;
+  /* No position override here -- the base `th { position: sticky }` already
+   * establishes a positioning context for the absolute ::after below. */
 }
 
 th[data-sort]:hover {
