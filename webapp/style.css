@@ -320,7 +320,8 @@ th[data-sort]::after {
 th.sort-asc::after { content: "▲"; color: var(--accent); }
 th.sort-desc::after { content: "▼"; color: var(--accent); }
 
-body[data-view="season"] .years-col {
+body[data-view="season"] .years-col,
+body[data-view="season"] .career-only {
   display: none;
 }
 

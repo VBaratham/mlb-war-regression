@@ -437,6 +437,8 @@ function renderTable() {
       <td class="${rankCls("off_war")}">${fmt(r.off_war)}</td>
       <td class="${rankCls("pit_war")}">${fmt(r.pit_war)}</td>
       <td class="${rankCls("fld_war")}">${fmt(r.fld_war)}</td>
+      <td class="num career-only">${fmt(r.war_per_season)}</td>
+      <td class="num career-only">${fmt(r.peak_season_war)}</td>
       <td class="num">${totalInnings(r).toLocaleString()}</td>
       <td class="num years-col">${r.first_year || ""}</td>
       <td class="num years-col">${r.last_year_played || r.last_year || ""}</td>

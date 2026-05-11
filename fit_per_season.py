@@ -341,7 +341,10 @@ def main():
                        fld_innings=("fld_innings", "sum"),
                        seasons_played=("season", "nunique"),
                        first_year=("season", "min"),
-                       last_year_played=("season", "max")))
+                       last_year_played=("season", "max"),
+                       peak_season_war=("total_war", "max")))
+    # "Best annual contribution" rate: career total / seasons played.
+    sums["war_per_season"] = sums["total_war"] / sums["seasons_played"].clip(lower=1)
     # Bring along name / pos / team / teams from the existing enriched all-time
     # coefficients file (single source of truth for player metadata).
     coefs_path = EVENTS / f"coefficients_{TAG}_enriched.parquet"
@@ -355,6 +358,7 @@ def main():
     cols = ["player_id", "name", "pos", "team", "teams",
             "off_innings", "pit_innings", "fld_innings",
             "off_war", "pit_war", "fld_war", "total_war",
+            "war_per_season", "peak_season_war",
             "seasons_played", "first_year", "last_year_played"]
     sums = sums[[c for c in cols if c in sums.columns]]
     sums.sort_values("total_war", ascending=False).to_csv(career_path, index=False)
