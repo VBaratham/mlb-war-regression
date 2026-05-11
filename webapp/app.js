@@ -36,6 +36,7 @@ const WAR_SORT_KEYS = new Set([
   "total_war", "off_war", "pit_war", "fld_war",
   "war_per_season", "peak_season_war",
 ]);
+const CAREER_ONLY_KEYS = new Set(["war_per_season", "peak_season_war"]);
 
 const state = {
   manifest: null,
@@ -124,6 +125,18 @@ async function switchView(viewKey) {
   const banner = document.getElementById("caveat-banner");
   banner.hidden = true;
   banner.innerHTML = "";
+
+  // Season views hide the career-only WAR columns (war_per_season, peak).
+  // If one of them is the active rank/sort key, fall back to total_war so
+  // the # column and sort indicator don't reference a hidden column.
+  const seasonView = viewKey.startsWith("season:");
+  if (seasonView) {
+    if (CAREER_ONLY_KEYS.has(state.rankKey)) state.rankKey = "total_war";
+    if (CAREER_ONLY_KEYS.has(state.sort.key)) {
+      state.sort.key = "total_war";
+      state.sort.dir = "desc";
+    }
+  }
 
   if (viewKey === "all_time" || viewKey === "all_time_single_fit") {
     state.view = viewKey;
